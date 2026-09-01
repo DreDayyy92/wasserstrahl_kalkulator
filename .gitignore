@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+instance/
+uploads/
+
+# Reste von frueheren PyInstaller-Builds, falls mal wieder gebaut wird
+build/
+dist/
+*.spec
+
+# Editor/OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

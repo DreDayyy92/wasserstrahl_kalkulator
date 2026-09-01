@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+{% block content %}
+
+<section class="card">
+    <h2>Teil berechnen</h2>
+    <form action="{{ url_for('berechnen') }}" method="post" enctype="multipart/form-data">
+
+        <fieldset>
+            <legend>Berechnungsart</legend>
+            <label class="radio-inline">
+                <input type="radio" name="berechnungsart" value="dxf" checked onchange="toggleBerechnungsart()">
+                DXF-Datei hochladen
+            </label>
+            <label class="radio-inline">
+                <input type="radio" name="berechnungsart" value="manuell" onchange="toggleBerechnungsart()">
+                Nur Schnittlänge manuell eingeben
+            </label>
+            <label>Stückzahl:
+                <input type="number" step="1" min="1" name="stueckzahl" value="1">
+            </label>
+        </fieldset>
+
+        <fieldset id="modus_dxf_wrap">
+            <legend>DXF-Datei</legend>
+            <label>Bauteil-DXF:
+                <input type="file" name="dxf_file" id="dxf_file" accept=".dxf" onchange="loadDxfPreview()">
+            </label>
+            <div id="dxf_preview_wrap" class="dxf-preview-wrap" hidden>
+                <div id="dxf_preview_svg" class="dxf-preview"></div>
+                <p id="dxf_preview_error" class="dxf-preview-error"></p>
+                <p id="dxf_preview_einstiche" class="hint"></p>
+                <div id="dxf_layers" class="dxf-layers"></div>
+            </div>
+        </fieldset>
+
+        <fieldset id="modus_manuell_wrap" hidden>
+            <legend>Manuelle Schnittlänge</legend>
+            <label>Schnittlänge (mm):
+                <input type="number" step="0.1" min="0" name="manuelle_schnittlaenge_mm">
+            </label>
+            <label>Blechfläche (m², nur nötig wenn Material mitberechnet wird):
+                <input type="number" step="0.0001" min="0" name="manuelle_flaeche_m2" value="0">
+            </label>
+            <label>Anzahl Einstiche/Löcher:
+                <input type="number" step="1" min="0" name="manuelle_einstiche" value="1">
+            </label>
+        </fieldset>
+
+        <fieldset>
+            <legend>Material</legend>
+            <label class="checkbox-inline">
+                <input type="checkbox" name="material_berechnen" id="material_berechnen" checked>
+                Materialkosten mitberechnen (abwählen bei Beistellmaterial des Kunden – Material trotzdem auswählen für die richtige Schnittgeschwindigkeit)
+            </label>
+            <div id="material_fields_wrap">
+                {% if has_materials %}
+                    <label>Material suchen:
+                        <input type="text" id="material_search" placeholder="Materialname..." oninput="filterMaterials()">
+                    </label>
+                    <label>Material aus Liste (füllt Dicke, Schnittgeschwindigkeit und Preis/kg unten):
+                        <select id="material_select" onchange="fillMaterial()">
+                            <option value="">— manuell eingeben —</option>
+                            {% for m in materials %}
+                                <option
+                                    value="{{ m.preis_pro_kg }}"
+                                    data-staerke="{{ m.staerke_mm }}"
+                                    data-schnittgeschw="{{ m.schnittgeschwindigkeit_mm_min }}"
+                                    data-search="{{ m.name|lower }}"
+                                >
+                                    {{ m.name }} ({{ m.staerke_mm }} mm, {{ '%.2f'|format(m.preis_pro_kg) }} €/kg)
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                {% endif %}
+                <label>Materialdicke (mm):
+                    <input type="number" step="0.01" name="dicke_mm" id="dicke_mm_field">
+                </label>
+                <label>Dichte (g/cm³, Baustahl 7.85 / Edelstahl 7.9 / Alu 2.7):
+                    <input type="number" step="0.01" name="dichte_g_cm3" value="{{ settings.dichte_g_cm3 or 7.85 }}">
+                </label>
+                <label>Materialpreis pro kg (€):
+                    <input type="number" step="0.01" name="material_preis_pro_kg" id="material_preis_pro_kg" value="0">
+                </label>
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>Schneiden</legend>
+            <label>Schnittgeschwindigkeit (mm/min):
+                <input type="number" step="1" name="schnittgeschwindigkeit_mm_min" id="schnittgeschwindigkeit_field" value="500">
+            </label>
+        </fieldset>
+
+        <button type="submit">Kosten berechnen</button>
+    </form>
+</section>
+
+<script>
+function fillMaterial() {
+    const sel = document.getElementById('material_select');
+    const opt = sel.selectedOptions[0];
+    if (!opt || !opt.value) return;
+
+    document.getElementById('material_preis_pro_kg').value = parseFloat(opt.value).toFixed(2);
+    if (opt.dataset.staerke) {
+        document.getElementById('dicke_mm_field').value = opt.dataset.staerke;
+    }
+    if (opt.dataset.schnittgeschw) {
+        document.getElementById('schnittgeschwindigkeit_field').value = opt.dataset.schnittgeschw;
+    }
+}
+
+function filterMaterials() {
+    const query = document.getElementById('material_search').value.trim().toLowerCase();
+    const sel = document.getElementById('material_select');
+    let firstVisible = null;
+    for (const opt of sel.options) {
+        if (!opt.dataset.search) continue; // "— manuell eingeben —" immer sichtbar lassen
+        const match = !query || opt.dataset.search.includes(query);
+        opt.hidden = !match;
+        if (match && !firstVisible) firstVisible = opt;
+    }
+    if (sel.selectedOptions[0] && sel.selectedOptions[0].hidden) {
+        sel.value = firstVisible ? firstVisible.value : '';
+        fillMaterial();
+    }
+}
+
+async function loadDxfPreview() {
+    const input = document.getElementById('dxf_file');
+    const wrap = document.getElementById('dxf_preview_wrap');
+    const svgBox = document.getElementById('dxf_preview_svg');
+    const errBox = document.getElementById('dxf_preview_error');
+    const einsticheBox = document.getElementById('dxf_preview_einstiche');
+    const layersBox = document.getElementById('dxf_layers');
+
+    svgBox.innerHTML = '';
+    layersBox.innerHTML = '';
+    errBox.textContent = '';
+    einsticheBox.textContent = '';
+
+    if (!input.files.length) {
+        wrap.hidden = true;
+        return;
+    }
+
+    wrap.hidden = false;
+    errBox.textContent = 'Lade Vorschau...';
+
+    const formData = new FormData();
+    formData.append('dxf_file', input.files[0]);
+
+    try {
+        const resp = await fetch('{{ url_for("dxf_preview") }}', { method: 'POST', body: formData });
+        const data = await resp.json();
+
+        if (!resp.ok || data.error) {
+            errBox.textContent = data.error || 'Vorschau fehlgeschlagen.';
+            return;
+        }
+        errBox.textContent = '';
+        svgBox.innerHTML = data.svg || '';
+        if (typeof data.einstiche === 'number') {
+            einsticheBox.textContent = 'Erkannte Einstiche: ' + data.einstiche;
+        }
+
+        // Marker, damit der Server weiß: Layer-Checkboxen wurden gerendert
+        // und included_layers soll ausgewertet werden (auch wenn leer).
+        const marker = document.createElement('input');
+        marker.type = 'hidden';
+        marker.name = 'layers_filter_active';
+        marker.value = '1';
+        layersBox.appendChild(marker);
+
+        if (data.layers && data.layers.length) {
+            const title = document.createElement('p');
+            title.className = 'hint';
+            title.textContent = 'Zu schneidende Konturen (Layer) auswählen:';
+            layersBox.appendChild(title);
+
+            data.layers.forEach(function (layer) {
+                const label = document.createElement('label');
+                label.className = 'layer-checkbox';
+
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.name = 'included_layers';
+                cb.value = layer.name;
+                cb.checked = true;
+                cb.addEventListener('change', function () {
+                    toggleLayerVisibility(layer.name, cb.checked);
+                });
+
+                label.appendChild(cb);
+                label.appendChild(document.createTextNode(' ' + layer.name + ' (' + layer.entity_count + ')'));
+                layersBox.appendChild(label);
+            });
+        }
+    } catch (err) {
+        errBox.textContent = 'Vorschau fehlgeschlagen: ' + err;
+    }
+}
+
+function toggleLayerVisibility(layerName, visible) {
+    const svgBox = document.getElementById('dxf_preview_svg');
+    svgBox.querySelectorAll('polyline[data-layer]').forEach(function (el) {
+        if (el.getAttribute('data-layer') === layerName) {
+            el.style.display = visible ? '' : 'none';
+        }
+    });
+}
+
+function toggleBerechnungsart() {
+    const mode = document.querySelector('input[name="berechnungsart"]:checked').value;
+    document.getElementById('modus_dxf_wrap').hidden = mode !== 'dxf';
+    document.getElementById('modus_manuell_wrap').hidden = mode !== 'manuell';
+}
+</script>
+{% endblock %}

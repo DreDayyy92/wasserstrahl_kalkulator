@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Wasserstrahl-Kalkulator</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <header>
+        <h1>Wasserstrahl-Kalkulator</h1>
+    </header>
+    <main>
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="flash">
+                    {% for m in messages %}<p>{{ m }}</p>{% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </main>
+    <footer>
+        {% if session.is_admin %}
+            <a href="{{ url_for('admin_dashboard') }}">Admin-Bereich</a>
+            <form action="{{ url_for('admin_logout') }}" method="post" class="inline-form">
+                <button type="submit" class="link-button">Abmelden</button>
+            </form>
+        {% else %}
+            <a href="{{ url_for('admin_login') }}">Admin</a>
+        {% endif %}
+    </footer>
+</body>
+</html>

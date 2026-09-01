@@ -1,0 +1,9 @@
+services:
+  wasserstrahl-kalkulator:
+    build: .
+    ports:
+      - "5050:5050"
+    volumes:
+      - ./instance:/app/instance
+      - ./uploads:/app/uploads
+    restart: unless-stopped

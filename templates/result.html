@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card">
+    <h2>Ergebnis: {{ dateiname }}</h2>
+
+    {% if r.svg_preview %}
+        <h3>DXF-Vorschau</h3>
+        <div class="dxf-preview">{{ r.svg_preview|safe }}</div>
+    {% endif %}
+
+    <h3>Geometrie</h3>
+    <table class="result-table">
+        {% if r.geo.width_mm is not none %}
+            <tr><td>Breite × Höhe</td><td>{{ r.geo.width_mm }} × {{ r.geo.height_mm }} mm</td></tr>
+        {% endif %}
+        <tr><td>Fläche</td><td>{{ '%.4f'|format(r.geo.area_m2) }} m²</td></tr>
+        <tr><td>Gesamt-Schnittlänge</td><td>{{ r.geo.total_cut_length_mm }} mm</td></tr>
+        {% if r.geo.entity_count is not none %}
+            <tr><td>Erfasste Entitäten</td><td>{{ r.geo.entity_count }} (übersprungen: {{ r.geo.skipped_entity_count }})</td></tr>
+        {% endif %}
+    </table>
+
+    <h3>Material{% if not r.material_berechnet %} <small>(Beistellmaterial des Kunden)</small>{% endif %}</h3>
+    {% if r.material_berechnet %}
+        <table class="result-table">
+            <tr><td>Dicke</td><td>{{ r.dicke_mm }} mm</td></tr>
+            <tr><td>Dichte</td><td>{{ r.dichte }} g/cm³</td></tr>
+            <tr><td>Gewicht</td><td>{{ r.gewicht_kg }} kg</td></tr>
+            <tr><td>Preis/kg</td><td>{{ '%.2f'|format(r.material_preis_pro_kg) }} €</td></tr>
+            <tr><td>Materialkosten pro Teil</td><td>{{ '%.2f'|format(r.materialkosten) }} €</td></tr>
+            <tr class="highlight"><td>Materialkosten × {{ r.stueckzahl }}</td><td>{{ '%.2f'|format(r.materialkosten_gesamt) }} €</td></tr>
+        </table>
+    {% else %}
+        <p class="hint">Kein Material berechnet – Kunde bringt eigenes Blech mit.</p>
+    {% endif %}
+
+    <h3>Maschine</h3>
+    <table class="result-table">
+        <tr><td>Einstiche</td><td>{{ r.einstiche }}</td></tr>
+        <tr><td>Schnittzeit</td><td>{{ r.schnittzeit_min }} min</td></tr>
+        <tr><td>Einstechzeit gesamt</td><td>{{ r.einstechzeit_min }} min</td></tr>
+        <tr><td>Maschinenzeit pro Teil</td><td>{{ r.maschinenzeit_min }} min</td></tr>
+        <tr><td>Maschinenkosten pro Teil</td><td>{{ '%.2f'|format(r.maschinenkosten) }} €</td></tr>
+        <tr class="highlight"><td>Maschinenkosten × {{ r.stueckzahl }}</td><td>{{ '%.2f'|format(r.maschinenkosten_gesamt) }} €</td></tr>
+        <tr class="highlight"><td>Rüstkosten (einmalig)</td><td>{{ '%.2f'|format(r.ruestkosten) }} €</td></tr>
+    </table>
+
+    <h3 class="total">Gesamtkosten für {{ r.stueckzahl }} Stück: {{ '%.2f'|format(r.gesamtkosten) }} €</h3>
+
+    <a href="{{ url_for('index') }}" class="button">Nächstes Teil berechnen</a>
+    <a href="{{ url_for('export_pdf') }}" class="button secondary-button">PDF exportieren</a>
+</section>
+{% endblock %}

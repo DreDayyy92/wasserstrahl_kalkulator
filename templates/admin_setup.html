@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card">
+    <h2>Admin-Passwort einrichten</h2>
+    <p class="hint">Noch kein Admin-Passwort vergeben. Einmalig festlegen - danach über "Admin" im Footer erreichbar.</p>
+    <form action="{{ url_for('admin_setup') }}" method="post">
+        <label>Passwort:
+            <input type="password" name="password" minlength="4" required autofocus>
+        </label>
+        <label>Passwort wiederholen:
+            <input type="password" name="password2" minlength="4" required>
+        </label>
+        <button type="submit">Passwort speichern</button>
+    </form>
+</section>
+{% endblock %}

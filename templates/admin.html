@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+
+<section class="card">
+    <h2>Feste Kostenparameter</h2>
+    <p class="hint">Diese Werte sieht/ändert der Kunde nicht - sie fließen automatisch in jede Berechnung ein.</p>
+    <form action="{{ url_for('admin_settings_save') }}" method="post">
+        <label>Geschnittener Anteil der Listen-Schnittgeschwindigkeit (%, meist ~50%):
+            <input type="number" step="1" min="1" max="150" name="schnittgeschwindigkeit_prozent" value="{{ settings.schnittgeschwindigkeit_prozent }}">
+        </label>
+        <label>Maschinenstundensatz (€/h):
+            <input type="number" step="0.01" name="maschinenstundensatz_eur" value="{{ settings.maschinenstundensatz_eur }}">
+        </label>
+        <label>Einstechzeit je Einstich (s):
+            <input type="number" step="1" name="einstechzeit_s" value="{{ settings.einstechzeit_s }}">
+        </label>
+        <label>Rüstzeit (min):
+            <input type="number" step="0.5" name="ruestzeit_min" value="{{ settings.ruestzeit_min }}">
+        </label>
+        <button type="submit">Speichern</button>
+    </form>
+</section>
+
+<section class="card">
+    <h2>Materialliste (CSV)</h2>
+    <p class="hint">
+        Spalten: <code>Material;Staerke_mm;Schnittgeschwindigkeit_mm_min;Preis_pro_kg</code>
+        – eine Zeile pro Material/Stärke-Kombination.
+        <a href="{{ url_for('materialien_vorlage') }}">Vorlage herunterladen</a>.
+    </p>
+    {% if has_materials %}
+        <p class="ok">{{ materials|length }} Materialien geladen.</p>
+        <form action="{{ url_for('materialien_upload') }}" method="post" enctype="multipart/form-data" class="inline-form">
+            <label>Neue Material-CSV importieren:
+                <input type="file" name="materialien_file" accept=".csv" required>
+            </label>
+            <button type="submit">Importieren</button>
+        </form>
+        <form action="{{ url_for('materialien_reset') }}" method="post" class="inline-form">
+            <button type="submit" class="secondary">Materialliste löschen</button>
+        </form>
+    {% else %}
+        <p>Noch keine Materialliste importiert.</p>
+        <form action="{{ url_for('materialien_upload') }}" method="post" enctype="multipart/form-data">
+            <label>Material-CSV-Datei:
+                <input type="file" name="materialien_file" accept=".csv" required>
+            </label>
+            <button type="submit">Hochladen</button>
+        </form>
+    {% endif %}
+</section>
+{% endblock %}

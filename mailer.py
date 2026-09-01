@@ -21,6 +21,7 @@ def send_order_email(
     result: dict,
     dateiname: str,
     dxf_path: str | None,
+    preview_png_path: str | None,
     kunde_name: str,
     kunde_email: str,
     kunde_notiz: str,
@@ -60,7 +61,7 @@ def send_order_email(
 
     msg.set_content("\n".join(lines))
 
-    pdf_bytes = pdf_export.build_pdf(result, dateiname)
+    pdf_bytes = pdf_export.build_pdf(result, dateiname, preview_png_path)
     msg.add_attachment(pdf_bytes, maintype="application", subtype="pdf", filename="kalkulation.pdf")
 
     if dxf_path and os.path.exists(dxf_path):
@@ -68,6 +69,11 @@ def send_order_email(
             dxf_bytes = f.read()
         anhang_name = dateiname if dateiname.lower().endswith(".dxf") else f"{dateiname}.dxf"
         msg.add_attachment(dxf_bytes, maintype="application", subtype="dxf", filename=anhang_name)
+
+    if preview_png_path and os.path.exists(preview_png_path):
+        with open(preview_png_path, "rb") as f:
+            png_bytes = f.read()
+        msg.add_attachment(png_bytes, maintype="image", subtype="png", filename="vorschau.png")
 
     with smtplib.SMTP(host, port, timeout=20) as smtp:
         smtp.starttls()

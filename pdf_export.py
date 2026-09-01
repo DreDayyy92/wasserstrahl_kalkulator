@@ -21,7 +21,7 @@ def _section(pdf: FPDF, title: str) -> None:
     pdf.cell(0, 8, title, new_x="LMARGIN", new_y="NEXT")
 
 
-def build_pdf(result: dict, dateiname: str) -> bytes:
+def build_pdf(result: dict, dateiname: str, preview_png_path: str | None = None) -> bytes:
     pdf = FPDF(format="A4", unit="mm")
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
@@ -38,6 +38,10 @@ def build_pdf(result: dict, dateiname: str) -> bytes:
         _row(pdf, "Breite x Hoehe", f"{geo['width_mm']} x {geo['height_mm']} mm")
     _row(pdf, "Flaeche", f"{geo.get('area_m2', 0):.4f} m2")
     _row(pdf, "Gesamt-Schnittlaenge", f"{geo.get('total_cut_length_mm', 0)} mm")
+
+    if preview_png_path:
+        pdf.ln(3)
+        pdf.image(preview_png_path, x=10, w=80)
 
     _section(pdf, "Material" + ("" if result["material_berechnet"] else " (Beistellmaterial des Kunden)"))
     _row(pdf, "Material", f"{result.get('material_name', '-')} ({result['dicke_mm']} mm)")

@@ -112,6 +112,12 @@ def _session_dxf_path() -> str:
     return os.path.join(RESULTS_DIR, f"{_session_uid()}.dxf")
 
 
+def _session_preview_path() -> str:
+    """PNG-Vorschau des Bauteils pro Session - wird im PDF-Export eingebettet
+    und beim Mailversand als zusätzlicher Bild-Anhang mitgeschickt."""
+    return os.path.join(RESULTS_DIR, f"{_session_uid()}.png")
+
+
 def _cleanup_old_results(max_age_seconds: int = 24 * 3600) -> None:
     try:
         cutoff = time.time() - max_age_seconds
@@ -210,6 +216,9 @@ def berechnen():
         stale_dxf_copy = _session_dxf_path()
         if os.path.exists(stale_dxf_copy):
             os.remove(stale_dxf_copy)
+        stale_preview = _session_preview_path()
+        if os.path.exists(stale_preview):
+            os.remove(stale_preview)
     else:
         dxf_file = request.files.get("dxf_file")
         if not dxf_file or dxf_file.filename == "":
@@ -233,6 +242,10 @@ def berechnen():
             # mitschicken kann (siehe /auftrag/senden) - andere Besucher sehen
             # diese Datei nicht, da sie unter der eigenen Session-UID liegt.
             shutil.copyfile(filepath, _session_dxf_path())
+            png_bytes = dxf.render_png_preview(filepath, included_layers=included_layers)
+            if png_bytes:
+                with open(_session_preview_path(), "wb") as f:
+                    f.write(png_bytes)
         except Exception as e:
             flash(f"DXF konnte nicht gelesen werden: {e}")
             return redirect(url_for("index"))
@@ -357,7 +370,11 @@ def export_pdf():
         flash("Keine Berechnung zum Exportieren vorhanden.")
         return redirect(url_for("index"))
 
-    pdf_bytes = pdf_export.build_pdf(data["result"], data["dateiname"])
+    preview_path = _session_preview_path()
+    if not os.path.exists(preview_path):
+        preview_path = None
+
+    pdf_bytes = pdf_export.build_pdf(data["result"], data["dateiname"], preview_path)
     return Response(
         pdf_bytes,
         mimetype="application/pdf",
@@ -387,12 +404,18 @@ def auftrag_senden():
     if not os.path.exists(dxf_path):
         dxf_path = None
 
+    preview_path = _session_preview_path()
+    if not os.path.exists(preview_path):
+        preview_path = None
+
     kunde_name = request.form.get("kunde_name", "").strip()
     kunde_email = request.form.get("kunde_email", "").strip()
     kunde_notiz = request.form.get("kunde_notiz", "").strip()
 
     try:
-        mailer.send_order_email(result, dateiname, dxf_path, kunde_name, kunde_email, kunde_notiz)
+        mailer.send_order_email(
+            result, dateiname, dxf_path, preview_path, kunde_name, kunde_email, kunde_notiz
+        )
     except Exception as e:
         flash(f"E-Mail konnte nicht gesendet werden: {e}")
         return render_template("result.html", r=result, dateiname=dateiname, mail_configured=True)

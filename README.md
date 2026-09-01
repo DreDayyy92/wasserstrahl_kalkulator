@@ -118,8 +118,9 @@ eigenes Thema, sag Bescheid, wenn wir das als Nächstes angehen sollen.
    Maschinenkosten je Stückzahl, Rüstkosten (einmalig), Gesamtkosten – inkl.
    PDF-Export und "Auftrag per E-Mail senden" (siehe unten). Jeder Besucher
    sieht nur seine eigene letzte Berechnung (Session-Cookie, kein Login
-   nötig) - Maschinenstundensatz und Rüstzeit sind fest hinterlegt (siehe
-   Admin-Bereich) und werden dem Kunden nicht angezeigt.
+   nötig) - Maschinenstundensatz, Rüstzeit und Einstechzeit je Einstich sind
+   fest hinterlegt (siehe Admin-Bereich) und werden dem Kunden nicht
+   angezeigt.
 
 ## Admin-Bereich
 
@@ -140,8 +141,10 @@ gehashtes Passwort, kein Klartext); danach normaler Login. Dort:
 ## Auftrag per E-Mail senden
 
 Auf der Ergebnisseite kann der Kunde das berechnete Teil direkt per E-Mail als
-Auftrag an den Betreiber schicken (PDF-Kalkulation + Original-DXF als Anhang,
-optional Name/E-Mail/Anmerkung des Kunden als `Reply-To`).
+Auftrag an den Betreiber schicken (PDF-Kalkulation als Anhang, plus die
+Original-DXF-Datei, sofern per DXF-Upload gerechnet wurde - bei der manuellen
+Schnittlängen-Eingabe gibt es keine Datei zum Anhängen; optional Name/E-Mail/
+Anmerkung des Kunden als `Reply-To`).
 
 Damit das funktioniert, müssen die SMTP-Zugangsdaten des Postfachs, über das
 gesendet werden soll (z.B. `schneiden@baeckereitechnik-doerner.de`), einmalig

@@ -203,3 +203,63 @@ def render_svg_preview(filepath: str, included_layers=None, max_size: int = 400)
         + "".join(polylines) +
         "</svg>"
     )
+
+
+def render_png_preview(filepath: str, included_layers=None, max_size: int = 800) -> bytes:
+    """Rasterisiert dieselbe Kontur wie render_svg_preview als PNG (Pillow),
+    damit sie als Bild in PDF-Export/E-Mail-Anhang eingebettet werden kann -
+    ein Browser stellt SVG dar, ein PDF-Betrachter/Mail-Client nicht
+    zuverlässig. Zeichnet mit 3x Supersampling und verkleinert danach, für
+    glattere Linien als direktes 1:1-Zeichnen."""
+    from io import BytesIO
+
+    from PIL import Image, ImageDraw
+
+    doc = ezdxf.readfile(filepath)
+    msp = doc.modelspace()
+    entities = _cut_entities(msp, included_layers)
+
+    if not entities:
+        return b""
+
+    extents = ezbbox.extents(entities, fast=True)
+    if not extents.has_data:
+        return b""
+
+    min_x, min_y = extents.extmin.x, extents.extmin.y
+    max_x, max_y = extents.extmax.x, extents.extmax.y
+    width = (max_x - min_x) or 1.0
+    height = (max_y - min_y) or 1.0
+
+    supersample = 3
+    padding = 10 * supersample
+    target = max_size * supersample
+    scale = min((target - 2 * padding) / width, (target - 2 * padding) / height)
+    img_width = max(1, int(width * scale + 2 * padding))
+    img_height = max(1, int(height * scale + 2 * padding))
+
+    def to_px(x, y):
+        px = (x - min_x) * scale + padding
+        py = img_height - ((y - min_y) * scale + padding)  # DXF Y-oben -> Bild Y-unten
+        return px, py
+
+    img = Image.new("RGB", (img_width, img_height), "white")
+    draw = ImageDraw.Draw(img)
+
+    for e in entities:
+        try:
+            p = ezpath.make_path(e)
+        except Exception:
+            continue
+        points = list(p.flattening(0.1))
+        if len(points) < 2:
+            continue
+        pixels = [to_px(pt.x, pt.y) for pt in points]
+        draw.line(pixels, fill=(26, 127, 55), width=supersample)
+
+    final_size = (max(1, img_width // supersample), max(1, img_height // supersample))
+    img = img.resize(final_size, Image.LANCZOS)
+
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()

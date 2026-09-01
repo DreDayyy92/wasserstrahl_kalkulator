@@ -4,10 +4,23 @@
     <meta charset="UTF-8">
     <title>Wasserstrahl-Kalkulator</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script>
+        // Vor dem ersten Rendern anwenden, damit die Seite nicht kurz im
+        // falschen Theme aufblitzt (Flash of wrong theme).
+        (function () {
+            try {
+                var saved = localStorage.getItem('theme');
+                if (saved === 'light' || saved === 'dark') {
+                    document.documentElement.setAttribute('data-theme', saved);
+                }
+            } catch (e) {}
+        })();
+    </script>
 </head>
 <body>
     <header>
         <h1>Wasserstrahl-Kalkulator</h1>
+        <button type="button" id="theme_toggle" class="theme-toggle" onclick="toggleTheme()">🌓 Design</button>
     </header>
     <main>
         {% with messages = get_flashed_messages() %}
@@ -32,5 +45,18 @@
             <a href="{{ url_for('admin_login') }}">Admin</a>
         {% endif %}
     </footer>
+    <script>
+        function currentTheme() {
+            var explicit = document.documentElement.getAttribute('data-theme');
+            if (explicit) return explicit;
+            return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+
+        function toggleTheme() {
+            var next = currentTheme() === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', next);
+            try { localStorage.setItem('theme', next); } catch (e) {}
+        }
+    </script>
 </body>
 </html>

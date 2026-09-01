@@ -52,4 +52,27 @@
     <a href="{{ url_for('index') }}" class="button">Nächstes Teil berechnen</a>
     <a href="{{ url_for('export_pdf') }}" class="button secondary-button">PDF exportieren</a>
 </section>
+
+<section class="card">
+    <h2>Auftrag senden</h2>
+    {% if not mail_configured %}
+        <p class="hint">E-Mail-Versand ist noch nicht eingerichtet. Bitte den Betreiber kontaktieren, um dieses Teil in Auftrag zu geben.</p>
+    {% elif gesendet %}
+        <p class="ok">Ihr Auftrag wurde per E-Mail an uns gesendet. Wir melden uns bei Ihnen.</p>
+    {% else %}
+        <p class="hint">Teil und Kalkulation (PDF{% if r.geo.width_mm is not none %} + Original-DXF{% endif %}) per E-Mail an uns senden, damit wir den Zuschnitt starten können.</p>
+        <form action="{{ url_for('auftrag_senden') }}" method="post">
+            <label>Ihr Name:
+                <input type="text" name="kunde_name">
+            </label>
+            <label>Ihre E-Mail-Adresse (für Rückfragen):
+                <input type="email" name="kunde_email">
+            </label>
+            <label>Anmerkung:
+                <textarea name="kunde_notiz" rows="3"></textarea>
+            </label>
+            <button type="submit">Auftrag per E-Mail senden</button>
+        </form>
+    {% endif %}
+</section>
 {% endblock %}

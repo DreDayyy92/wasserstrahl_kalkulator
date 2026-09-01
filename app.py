@@ -1,16 +1,23 @@
 import os
 import secrets
+import shutil
 import time
 import uuid
 from functools import wraps
 
+from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request, redirect, url_for, flash, Response, session
 from werkzeug.security import generate_password_hash, check_password_hash
 
 import dxf_analyzer as dxf
+import mailer
 import materials_import
 import pdf_export
 import storage
+
+# Laedt SMTP-Zugangsdaten/Zieladresse aus einer lokalen .env-Datei (siehe
+# .env.example) - die echten Werte stehen damit nie im Quellcode/Git-Repo.
+load_dotenv()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 INSTANCE_DIR = os.path.join(BASE_DIR, "instance")
@@ -86,13 +93,23 @@ def admin_required(view):
     return wrapped
 
 
-def _session_result_path() -> str:
+def _session_uid() -> str:
     """Jeder Besucher bekommt über die (Login-freie) Session eine eigene ID,
-    damit niemand die Berechnung/den PDF-Export eines anderen sieht."""
+    damit niemand die Berechnung/den PDF-Export/die DXF eines anderen sieht."""
     if "uid" not in session:
         session["uid"] = uuid.uuid4().hex
         session.permanent = True
-    return os.path.join(RESULTS_DIR, f"{session['uid']}.json")
+    return session["uid"]
+
+
+def _session_result_path() -> str:
+    return os.path.join(RESULTS_DIR, f"{_session_uid()}.json")
+
+
+def _session_dxf_path() -> str:
+    """Kopie der zuletzt berechneten DXF pro Session - wird nur gebraucht,
+    damit der Kunde sie beim Senden per Mail als Anhang mitschicken kann."""
+    return os.path.join(RESULTS_DIR, f"{_session_uid()}.dxf")
 
 
 def _cleanup_old_results(max_age_seconds: int = 24 * 3600) -> None:
@@ -188,6 +205,11 @@ def berechnen():
         }
         svg_preview = ""
         dateiname = "Manuelle Eingabe"
+        # Keine DXF diesmal - eine evtl. von einer frueheren Berechnung dieser
+        # Session liegende Kopie darf beim Senden nicht mehr angehaengt werden.
+        stale_dxf_copy = _session_dxf_path()
+        if os.path.exists(stale_dxf_copy):
+            os.remove(stale_dxf_copy)
     else:
         dxf_file = request.files.get("dxf_file")
         if not dxf_file or dxf_file.filename == "":
@@ -207,6 +229,10 @@ def berechnen():
         try:
             geo = dxf.analyze_dxf(filepath, included_layers=included_layers)
             svg_preview = dxf.render_svg_preview(filepath, included_layers=included_layers)
+            # Kopie pro Session behalten, damit der Kunde sie später per Mail
+            # mitschicken kann (siehe /auftrag/senden) - andere Besucher sehen
+            # diese Datei nicht, da sie unter der eigenen Session-UID liegt.
+            shutil.copyfile(filepath, _session_dxf_path())
         except Exception as e:
             flash(f"DXF konnte nicht gelesen werden: {e}")
             return redirect(url_for("index"))
@@ -319,7 +345,9 @@ def berechnen():
     _cleanup_old_results()
     storage.save_json({"result": result, "dateiname": dateiname}, _session_result_path())
 
-    return render_template("result.html", r=result, dateiname=dateiname)
+    return render_template(
+        "result.html", r=result, dateiname=dateiname, mail_configured=mailer.is_configured()
+    )
 
 
 @app.route("/export/pdf")
@@ -334,6 +362,44 @@ def export_pdf():
         pdf_bytes,
         mimetype="application/pdf",
         headers={"Content-Disposition": "attachment; filename=kalkulation.pdf"},
+    )
+
+
+# --------------------------------------------------------------------------
+# Auftrag per E-Mail an den Betreiber senden (PDF + ggf. Original-DXF als
+# Anhang) - Zieladresse/SMTP-Zugangsdaten kommen aus der Umgebung (.env),
+# stehen also nicht im Quellcode.
+# --------------------------------------------------------------------------
+@app.route("/auftrag/senden", methods=["POST"])
+def auftrag_senden():
+    data = storage.load_json(_session_result_path(), default=None)
+    if not data:
+        flash("Keine Berechnung zum Senden vorhanden.")
+        return redirect(url_for("index"))
+
+    result, dateiname = data["result"], data["dateiname"]
+
+    if not mailer.is_configured():
+        flash("E-Mail-Versand ist noch nicht eingerichtet. Bitte den Betreiber kontaktieren.")
+        return render_template("result.html", r=result, dateiname=dateiname, mail_configured=False)
+
+    dxf_path = _session_dxf_path()
+    if not os.path.exists(dxf_path):
+        dxf_path = None
+
+    kunde_name = request.form.get("kunde_name", "").strip()
+    kunde_email = request.form.get("kunde_email", "").strip()
+    kunde_notiz = request.form.get("kunde_notiz", "").strip()
+
+    try:
+        mailer.send_order_email(result, dateiname, dxf_path, kunde_name, kunde_email, kunde_notiz)
+    except Exception as e:
+        flash(f"E-Mail konnte nicht gesendet werden: {e}")
+        return render_template("result.html", r=result, dateiname=dateiname, mail_configured=True)
+
+    flash("Auftrag wurde per E-Mail gesendet.")
+    return render_template(
+        "result.html", r=result, dateiname=dateiname, mail_configured=True, gesendet=True
     )
 
 

@@ -107,15 +107,18 @@ eigenes Thema, sag Bescheid, wenn wir das als Nächstes angehen sollen.
    - **Manuelle Schnittlänge**: Schnittlänge, Blechfläche und Anzahl Einstiche
      direkt eingeben, ohne DXF-Datei (Einstiche können hier naturgemäß nicht
      automatisch erkannt werden).
-2. **Parameter eingeben**: Stückzahl, Material (aus Liste oder manuell:
-   Dicke, Dichte, Schnittgeschwindigkeit, Preis/kg). Über eine Checkbox lässt
-   sich die Materialberechnung ganz abschalten (Kunde bringt eigenes Blech
-   mit).
+2. **Parameter eingeben**: Stückzahl, Material aus der Liste auswählen
+   (Preis/kg, Dichte und Listen-Schnittgeschwindigkeit kommen dabei fest aus
+   der Admin-Materialliste und sind nicht änderbar; nur die tatsächliche
+   Blechdicke lässt sich leicht anpassen), sowie Schnittqualität
+   (Feinschnitt 50 % / Mittelschnitt 75 % / Trennschnitt 100 % der Listen-
+   Schnittgeschwindigkeit). Über eine Checkbox lässt sich die
+   Materialberechnung ganz abschalten (Kunde bringt eigenes Blech mit).
 3. **Berechnen** → Ergebnisseite mit Aufschlüsselung: Materialkosten,
    Maschinenkosten je Stückzahl, Rüstkosten (einmalig), Gesamtkosten – inkl.
-   PDF-Export. Jeder Besucher sieht nur seine eigene letzte Berechnung
-   (Session-Cookie, kein Login nötig) - Maschinenstundensatz, Rüstzeit,
-   Einstechzeit und der Geschwindigkeits-Anteil sind fest hinterlegt (siehe
+   PDF-Export und "Auftrag per E-Mail senden" (siehe unten). Jeder Besucher
+   sieht nur seine eigene letzte Berechnung (Session-Cookie, kein Login
+   nötig) - Maschinenstundensatz und Rüstzeit sind fest hinterlegt (siehe
    Admin-Bereich) und werden dem Kunden nicht angezeigt.
 
 ## Admin-Bereich
@@ -125,13 +128,42 @@ Aufruf wird einmalig ein Passwort festgelegt (`instance/admin.json`, nur ein
 gehashtes Passwort, kein Klartext); danach normaler Login. Dort:
 
 - **Feste Kostenparameter**: Maschinenstundensatz, Rüstzeit, Einstechzeit je
-  Einstich, geschnittener Anteil der Listen-Schnittgeschwindigkeit (Standard
-  50%) - diese Werte sieht/ändert der Kunde nicht, sie fließen aber in jede
-  Berechnung ein.
-- **Materialliste (CSV)**: `Material;Staerke_mm;Schnittgeschwindigkeit_mm_min;Preis_pro_kg`,
-  eine Zeile pro Material/Stärke-Kombination. Vorlage zum Download in der
-  App. Nur der Admin kann sie hochladen/löschen; Kunden können daraus nur
-  auswählen.
+  Einstich - diese Werte sieht/ändert der Kunde nicht, sie fließen aber in
+  jede Berechnung ein.
+- **Materialliste (CSV)**: `Material;Staerke_mm;Schnittgeschwindigkeit_mm_min;Preis_pro_kg;Dichte_g_cm3`
+  (Dichte optional, Standard 7.85), eine Zeile pro Material/Stärke-
+  Kombination. Vorlage zum Download in der App. Nur der Admin kann sie
+  hochladen/löschen; Kunden können daraus nur auswählen, Preis/Geschwindigkeit/
+  Dichte kommen ausschließlich aus dieser Liste und sind für den Kunden nicht
+  änderbar.
+
+## Auftrag per E-Mail senden
+
+Auf der Ergebnisseite kann der Kunde das berechnete Teil direkt per E-Mail als
+Auftrag an den Betreiber schicken (PDF-Kalkulation + Original-DXF als Anhang,
+optional Name/E-Mail/Anmerkung des Kunden als `Reply-To`).
+
+Damit das funktioniert, müssen die SMTP-Zugangsdaten des Postfachs, über das
+gesendet werden soll (z.B. `schneiden@baeckereitechnik-doerner.de`), einmalig
+in einer lokalen `.env`-Datei hinterlegt werden:
+
+```bash
+cp .env.example .env
+# .env dann mit einem Editor öffnen und die echten Werte eintragen:
+#   SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, MAIL_FROM, MAIL_TO
+```
+
+Die Zugangsdaten/SMTP-Host/Serveradressen (z.B. `smtp.ionos.de`,
+`smtp.strato.de` - steht im Kundenportal des jeweiligen Mail-Hosters unter
+"Postausgangsserver"/"SMTP") stehen **nur** in dieser `.env`-Datei. Sie ist in
+`.gitignore` eingetragen und wird nie mit committet/auf GitHub hochgeladen -
+im Repo liegt nur `.env.example` als Vorlage ohne echte Werte. Bei Docker
+Compose wird `.env` automatisch als `env_file` in den Container geladen (in
+`docker-compose.yml` hinterlegt), ohne Neu-Build bei geänderten Werten -
+`docker compose up -d` reicht. Ist keine `.env` vorhanden bzw. sind
+`SMTP_HOST`/`MAIL_TO` nicht gesetzt, zeigt die Ergebnisseite statt des
+Sende-Formulars nur einen Hinweis, dass der Versand noch nicht eingerichtet
+ist - die restliche App funktioniert unabhängig davon normal weiter.
 
 ## Wichtige Vereinfachungen (bewusst, für den Start)
 
@@ -152,15 +184,17 @@ gehashtes Passwort, kein Klartext); danach normaler Login. Dort:
 
 ```
 Dockerfile               Container-Image (Python + Gunicorn)
-docker-compose.yml       Build + Start inkl. Volumes für instance/ und uploads/
+docker-compose.yml       Build + Start inkl. Volumes für instance/ und uploads/, lädt .env
+.env.example             Vorlage für SMTP-Zugangsdaten (echte Werte in .env, nicht im Git-Repo)
 app.py                  Flask-Routen
 storage.py                JSON-Persistenz-Helfer
-materials_import.py      Material-CSV-Einlesen (Material/Stärke/Geschw./Preis)
+materials_import.py      Material-CSV-Einlesen (Material/Stärke/Geschw./Preis/Dichte)
 dxf_analyzer.py           DXF-Bounding-Box, Schnittlängen- und SVG-Vorschau-Berechnung
 pdf_export.py             PDF-Kalkulationsblatt (fpdf2)
+mailer.py                 Versand des Auftrags (PDF + DXF) per E-Mail an den Betreiber
 templates/                HTML-Seiten
 static/style.css          Styling
 instance/                 gespeicherte Materialien/Settings/Admin-Passwort (entsteht zur Laufzeit)
-instance/results/         letzte Berechnung je Besucher-Session (für PDF-Export, Auto-Cleanup nach 24h)
+instance/results/         letzte Berechnung + DXF-Kopie je Besucher-Session (Auto-Cleanup nach 24h)
 uploads/                  hochgeladene Dateien (temporär)
 ```

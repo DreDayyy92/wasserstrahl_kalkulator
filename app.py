@@ -300,6 +300,7 @@ def berechnen():
         "gewicht_kg": round(gewicht_kg, 3),
         "material_preis_pro_kg": material_preis_pro_kg,
         "schnittqualitaet_label": SCHNITTQUALITAET[schnittqualitaet_key]["label"],
+        "schnittgeschwindigkeit_effektiv": round(schnittgeschw, 1),
         "stueckzahl": stueckzahl,
         "materialkosten": round(materialkosten, 2),
         "materialkosten_gesamt": round(materialkosten_gesamt, 2),

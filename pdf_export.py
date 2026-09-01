@@ -52,6 +52,8 @@ def build_pdf(result: dict, dateiname: str) -> bytes:
     _section(pdf, "Maschine")
     if result.get("schnittqualitaet_label"):
         _row(pdf, "Schnittqualitaet", result["schnittqualitaet_label"])
+    if result.get("schnittgeschwindigkeit_effektiv") is not None:
+        _row(pdf, "Schnittgeschwindigkeit", f"{result['schnittgeschwindigkeit_effektiv']} mm/min")
     _row(pdf, "Einstiche", str(result.get("einstiche", "-")))
     _row(pdf, "Schnittzeit", f"{result['schnittzeit_min']} min")
     _row(pdf, "Einstechzeit gesamt", f"{result['einstechzeit_min']} min")

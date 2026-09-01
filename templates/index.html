@@ -85,16 +85,17 @@
 
         <fieldset>
             <legend>Schneiden</legend>
-            <label>Schnittgeschwindigkeit lt. Material (mm/min) <small>(vom Betreiber festgelegt)</small>:
-                <input type="number" id="schnittgeschwindigkeit_field" value="" disabled>
-            </label>
             <label>Schnittqualität:</label>
             {% for key, q in schnittqualitaet.items() %}
                 <label class="radio-inline">
-                    <input type="radio" name="schnittqualitaet" value="{{ key }}" {% if key == schnittqualitaet_default %}checked{% endif %}>
+                    <input type="radio" name="schnittqualitaet" value="{{ key }}" data-prozent="{{ q.prozent }}"
+                           {% if key == schnittqualitaet_default %}checked{% endif %} onchange="updateSchnittgeschwindigkeitAnzeige()">
                     {{ q.label }} ({{ q.prozent }}%)
                 </label>
             {% endfor %}
+            <label>Effektive Schnittgeschwindigkeit (mm/min) <small>(ergibt sich aus Material + Schnittqualität, vom Betreiber festgelegt)</small>:
+                <input type="number" id="schnittgeschwindigkeit_field" value="" disabled>
+            </label>
         </fieldset>
 
         <button type="submit">Kosten berechnen</button>
@@ -114,9 +115,19 @@ function fillMaterial() {
     if (opt.dataset.staerke) {
         document.getElementById('dicke_mm_field').value = opt.dataset.staerke;
     }
-    if (opt.dataset.schnittgeschw) {
-        document.getElementById('schnittgeschwindigkeit_field').value = opt.dataset.schnittgeschw;
-    }
+    updateSchnittgeschwindigkeitAnzeige();
+}
+
+function updateSchnittgeschwindigkeitAnzeige() {
+    const sel = document.getElementById('material_select');
+    const opt = sel.selectedOptions[0];
+    const basis = opt && opt.dataset.schnittgeschw ? parseFloat(opt.dataset.schnittgeschw) : 0;
+
+    const qualEl = document.querySelector('input[name="schnittqualitaet"]:checked');
+    const prozent = qualEl ? parseFloat(qualEl.dataset.prozent) : 100;
+
+    const field = document.getElementById('schnittgeschwindigkeit_field');
+    field.value = basis ? Math.round(basis * (prozent / 100)) : '';
 }
 
 function filterMaterials() {

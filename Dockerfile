@@ -13,7 +13,7 @@ RUN apt-get update \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt gunicorn
 
-COPY app.py storage.py materials_import.py dxf_analyzer.py pdf_export.py ./
+COPY app.py storage.py materials_import.py dxf_analyzer.py pdf_export.py mailer.py ./
 COPY templates/ templates/
 COPY static/ static/
 

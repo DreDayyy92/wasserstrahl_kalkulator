@@ -26,6 +26,7 @@ RESULTS_DIR = os.path.join(INSTANCE_DIR, "results")
 MATERIALS_PATH = os.path.join(INSTANCE_DIR, "materials.json")
 SETTINGS_PATH = os.path.join(INSTANCE_DIR, "settings.json")
 ADMIN_PATH = os.path.join(INSTANCE_DIR, "admin.json")
+LEGAL_PATH = os.path.join(INSTANCE_DIR, "legal.json")
 SECRET_KEY_PATH = os.path.join(INSTANCE_DIR, "secret_key.txt")
 
 os.makedirs(INSTANCE_DIR, exist_ok=True)
@@ -82,6 +83,15 @@ SCHNITTQUALITAET = {
     "trenn": {"label": "Trennschnitt", "prozent": 100},
 }
 SCHNITTQUALITAET_DEFAULT = "fein"
+
+# Rechtstexte werden ausschließlich vom Admin gepflegt (Freitext), nicht von
+# uns vorformuliert - Impressum/Datenschutz/AGB sind rechtlich bindend und
+# müssen inhaltlich vom Betreiber (ggf. mit Generator/Anwalt) stammen.
+DEFAULT_LEGAL = {"impressum": "", "datenschutz": "", "agb": ""}
+
+# Wird überall dort angezeigt, wo Preise erscheinen (Formular, Ergebnis,
+# PDF, Auftrags-Mail) - alle berechneten Preise sind Nettopreise.
+NETTO_HINWEIS = "Alle Preise sind Nettopreise zzgl. der gesetzlichen Mehrwertsteuer."
 
 
 def admin_required(view):
@@ -141,7 +151,39 @@ def index():
         has_materials=len(materials) > 0,
         schnittqualitaet=SCHNITTQUALITAET,
         schnittqualitaet_default=SCHNITTQUALITAET_DEFAULT,
+        legal_ack=session.get("legal_ack", False),
+        netto_hinweis=NETTO_HINWEIS,
     )
+
+
+# --------------------------------------------------------------------------
+# Rechtliches: Impressum/Datenschutz/AGB (Freitext, vom Admin gepflegt) sowie
+# die einmalige Bestätigung, dass diese vor Nutzung des Rechners gelesen und
+# verstanden wurden (Session-Flag, kein Login nötig).
+# --------------------------------------------------------------------------
+@app.route("/impressum")
+def impressum():
+    legal = storage.load_json(LEGAL_PATH, default=DEFAULT_LEGAL)
+    return render_template("legal_page.html", title="Impressum", text=legal.get("impressum", ""))
+
+
+@app.route("/datenschutz")
+def datenschutz():
+    legal = storage.load_json(LEGAL_PATH, default=DEFAULT_LEGAL)
+    return render_template("legal_page.html", title="Datenschutzerklärung", text=legal.get("datenschutz", ""))
+
+
+@app.route("/agb")
+def agb():
+    legal = storage.load_json(LEGAL_PATH, default=DEFAULT_LEGAL)
+    return render_template("legal_page.html", title="AGB", text=legal.get("agb", ""))
+
+
+@app.route("/rechtliches/bestaetigen", methods=["POST"])
+def rechtliches_bestaetigen():
+    session["legal_ack"] = True
+    session.permanent = True
+    return redirect(url_for("index"))
 
 
 # --------------------------------------------------------------------------
@@ -151,6 +193,9 @@ def index():
 # --------------------------------------------------------------------------
 @app.route("/dxf/preview", methods=["POST"])
 def dxf_preview():
+    if not session.get("legal_ack"):
+        return jsonify({"error": "Bitte zuerst Datenschutzerklärung/Impressum bestätigen."}), 403
+
     dxf_file = request.files.get("dxf_file")
     if not dxf_file or dxf_file.filename == "":
         return jsonify({"error": "Keine Datei angegeben."}), 400
@@ -176,6 +221,10 @@ def dxf_preview():
 # --------------------------------------------------------------------------
 @app.route("/berechnen", methods=["POST"])
 def berechnen():
+    if not session.get("legal_ack"):
+        flash("Bitte zuerst Datenschutzerklärung und Impressum bestätigen.")
+        return redirect(url_for("index"))
+
     admin_settings = storage.load_json(SETTINGS_PATH, default=DEFAULT_SETTINGS)
 
     # Parameter aus dem Formular
@@ -223,6 +272,10 @@ def berechnen():
         dxf_file = request.files.get("dxf_file")
         if not dxf_file or dxf_file.filename == "":
             flash("Bitte eine DXF-Datei hochladen.")
+            return redirect(url_for("index"))
+
+        if request.form.get("rechte_bestaetigt") != "on":
+            flash("Bitte bestätigen, dass die hochgeladene Datei keine Rechte Dritter verletzt.")
             return redirect(url_for("index"))
 
         filename = f"teil_{uuid.uuid4().hex}.dxf"
@@ -359,7 +412,11 @@ def berechnen():
     storage.save_json({"result": result, "dateiname": dateiname}, _session_result_path())
 
     return render_template(
-        "result.html", r=result, dateiname=dateiname, mail_configured=mailer.is_configured()
+        "result.html",
+        r=result,
+        dateiname=dateiname,
+        mail_configured=mailer.is_configured(),
+        netto_hinweis=NETTO_HINWEIS,
     )
 
 
@@ -383,8 +440,9 @@ def export_pdf():
 
 
 # --------------------------------------------------------------------------
-# Auftrag per E-Mail an den Betreiber senden (PDF + ggf. Original-DXF als
-# Anhang) - Zieladresse/SMTP-Zugangsdaten kommen aus der Umgebung (.env),
+# Unverbindliche Angebotsanfrage per E-Mail an den Betreiber senden (PDF +
+# ggf. Original-DXF als Anhang) - kein verbindlicher Auftrag, nur eine
+# Anfrage. Zieladresse/SMTP-Zugangsdaten kommen aus der Umgebung (.env),
 # stehen also nicht im Quellcode.
 # --------------------------------------------------------------------------
 @app.route("/auftrag/senden", methods=["POST"])
@@ -398,7 +456,9 @@ def auftrag_senden():
 
     if not mailer.is_configured():
         flash("E-Mail-Versand ist noch nicht eingerichtet. Bitte den Betreiber kontaktieren.")
-        return render_template("result.html", r=result, dateiname=dateiname, mail_configured=False)
+        return render_template(
+            "result.html", r=result, dateiname=dateiname, mail_configured=False, netto_hinweis=NETTO_HINWEIS
+        )
 
     dxf_path = _session_dxf_path()
     if not os.path.exists(dxf_path):
@@ -413,16 +473,23 @@ def auftrag_senden():
     kunde_notiz = request.form.get("kunde_notiz", "").strip()
 
     try:
-        mailer.send_order_email(
+        mailer.send_offer_request_email(
             result, dateiname, dxf_path, preview_path, kunde_name, kunde_email, kunde_notiz
         )
     except Exception as e:
         flash(f"E-Mail konnte nicht gesendet werden: {e}")
-        return render_template("result.html", r=result, dateiname=dateiname, mail_configured=True)
+        return render_template(
+            "result.html", r=result, dateiname=dateiname, mail_configured=True, netto_hinweis=NETTO_HINWEIS
+        )
 
-    flash("Auftrag wurde per E-Mail gesendet.")
+    flash("Unverbindliche Anfrage wurde per E-Mail gesendet.")
     return render_template(
-        "result.html", r=result, dateiname=dateiname, mail_configured=True, gesendet=True
+        "result.html",
+        r=result,
+        dateiname=dateiname,
+        mail_configured=True,
+        gesendet=True,
+        netto_hinweis=NETTO_HINWEIS,
     )
 
 
@@ -480,11 +547,13 @@ def admin_logout():
 def admin_dashboard():
     materials = storage.load_json(MATERIALS_PATH, default=[])
     settings = storage.load_json(SETTINGS_PATH, default=DEFAULT_SETTINGS)
+    legal = storage.load_json(LEGAL_PATH, default=DEFAULT_LEGAL)
     return render_template(
         "admin.html",
         materials=materials,
         has_materials=len(materials) > 0,
         settings=settings,
+        legal=legal,
     )
 
 
@@ -507,6 +576,19 @@ def admin_settings_save():
     }
     storage.save_json(settings, SETTINGS_PATH)
     flash("Einstellungen gespeichert.")
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/rechtstexte", methods=["POST"])
+@admin_required
+def admin_rechtstexte_save():
+    legal = {
+        "impressum": request.form.get("impressum", "").strip(),
+        "datenschutz": request.form.get("datenschutz", "").strip(),
+        "agb": request.form.get("agb", "").strip(),
+    }
+    storage.save_json(legal, LEGAL_PATH)
+    flash("Rechtstexte gespeichert.")
     return redirect(url_for("admin_dashboard"))
 
 

@@ -37,7 +37,7 @@ label {
     margin: 0.5rem 0;
     font-size: 0.92rem;
 }
-input, select {
+input, select, textarea {
     display: block;
     width: 100%;
     margin-top: 0.25rem;
@@ -45,7 +45,9 @@ input, select {
     border: 1px solid #c9cdd3;
     border-radius: 4px;
     font-size: 0.95rem;
+    font-family: inherit;
 }
+textarea { resize: vertical; }
 .inline-form { display: inline-block; margin-right: 0.5rem; }
 button {
     background: #1d3557;
@@ -144,6 +146,18 @@ footer {
     align-items: center;
 }
 footer a { color: #888; }
+.legal-gate {
+    background: #f0f4f9;
+    border: 1px solid #cfd9e6;
+    border-radius: 6px;
+    padding: 1rem;
+}
+.legal-gate p { margin-top: 0; }
+.legal-text {
+    white-space: pre-wrap;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
 .link-button {
     background: none;
     border: none;

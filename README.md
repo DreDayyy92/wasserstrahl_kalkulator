@@ -97,13 +97,18 @@ eigenes Thema, sag Bescheid, wenn wir das als Nächstes angehen sollen.
 
 ## Ablauf (Kunde/Nutzer - kein Login nötig)
 
+0. **Vor der ersten Nutzung**: Bestätigung, dass Datenschutzerklärung,
+   Impressum und AGB gelesen und verstanden wurden (einmal pro Session/
+   Browser, siehe "Rechtliches" unten) - erst danach erscheint das
+   Berechnungsformular.
 1. **Teil erfassen** – zwei Berechnungsarten:
-   - **DXF-Datei hochladen**: Vorschau erscheint sofort im Formular, Konturen
-     (Layer) können per Checkbox von der Berechnung ausgeschlossen werden
-     (z.B. Beschriftungen). Die App berechnet automatisch Bounding Box
-     (Breite × Höhe → Blechfläche), Gesamt-Schnittlänge und **Anzahl
-     Einstiche** (jede unabhängige geschlossene Kontur - Außenkontur oder
-     Loch - zählt als ein Einstich).
+   - **DXF-Datei hochladen**: erfordert vorher die Bestätigung "keine Rechte
+     Dritter verletzt" (Checkbox, schaltet den Datei-Upload erst frei) - Vorschau
+     erscheint danach sofort im Formular, Konturen (Layer) können per Checkbox
+     von der Berechnung ausgeschlossen werden (z.B. Beschriftungen). Die App
+     berechnet automatisch Bounding Box (Breite × Höhe → Blechfläche),
+     Gesamt-Schnittlänge und **Anzahl Einstiche** (jede unabhängige
+     geschlossene Kontur - Außenkontur oder Loch - zählt als ein Einstich).
    - **Manuelle Schnittlänge**: Schnittlänge, Blechfläche und Anzahl Einstiche
      direkt eingeben, ohne DXF-Datei (Einstiche können hier naturgemäß nicht
      automatisch erkannt werden).
@@ -120,7 +125,9 @@ eigenes Thema, sag Bescheid, wenn wir das als Nächstes angehen sollen.
    sieht nur seine eigene letzte Berechnung (Session-Cookie, kein Login
    nötig) - Maschinenstundensatz, Rüstzeit und Einstechzeit je Einstich sind
    fest hinterlegt (siehe Admin-Bereich) und werden dem Kunden nicht
-   angezeigt.
+   angezeigt. **Alle angezeigten/berechneten Preise sind Nettopreise** (zzgl.
+   gesetzlicher Mehrwertsteuer) - der Hinweis erscheint im Formular, auf der
+   Ergebnisseite, im PDF und in der Auftrags-Mail.
 
 ## Admin-Bereich
 
@@ -137,6 +144,24 @@ gehashtes Passwort, kein Klartext); danach normaler Login. Dort:
   hochladen/löschen; Kunden können daraus nur auswählen, Preis/Geschwindigkeit/
   Dichte kommen ausschließlich aus dieser Liste und sind für den Kunden nicht
   änderbar.
+- **Rechtliches (Impressum, Datenschutz, AGB)**: drei Freitextfelder, werden
+  1:1 auf den öffentlichen Seiten `/impressum`, `/datenschutz`, `/agb`
+  angezeigt (im Footer jeder Seite verlinkt). Leer bis der Admin sie befüllt -
+  die inhaltliche Richtigkeit/Vollständigkeit liegt beim Betreiber, die App
+  liefert nur den Mechanismus, keine vorformulierten Texte (im Zweifel einen
+  Impressum-/Datenschutz-Generator oder eine Rechtsberatung nutzen, gerade
+  weil hier personenbezogene Daten - Name/E-Mail bei "Auftrag senden",
+  Session-Cookies - verarbeitet werden).
+
+## Rechtliche Bestätigung vor Nutzung
+
+Beim ersten Besuch zeigt die Startseite statt des Formulars einen Hinweis mit
+Links zu Datenschutzerklärung/Impressum/AGB und einer Checkbox "gelesen und
+verstanden". Erst nach Bestätigen (`/rechtliches/bestaetigen`, setzt ein
+Session-Flag) erscheint der eigentliche Rechner - gilt pro Browser/Session,
+nicht dauerhaft über einen Login. Beim DXF-Upload kommt zusätzlich eine
+eigene Checkbox ("keine Rechte Dritter verletzt"), die den Datei-Upload
+serverseitig UND clientseitig sperrt, bis sie angehakt ist.
 
 ## Auftrag per E-Mail senden
 
@@ -197,7 +222,7 @@ pdf_export.py             PDF-Kalkulationsblatt (fpdf2)
 mailer.py                 Versand des Auftrags (PDF + DXF) per E-Mail an den Betreiber
 templates/                HTML-Seiten
 static/style.css          Styling
-instance/                 gespeicherte Materialien/Settings/Admin-Passwort (entsteht zur Laufzeit)
+instance/                 gespeicherte Materialien/Settings/Admin-Passwort/Rechtstexte (entsteht zur Laufzeit)
 instance/results/         letzte Berechnung + DXF-Kopie je Besucher-Session (Auto-Cleanup nach 24h)
 uploads/                  hochgeladene Dateien (temporär)
 ```

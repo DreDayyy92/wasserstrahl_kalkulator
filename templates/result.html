@@ -47,20 +47,21 @@
         <tr class="highlight"><td>Rüstkosten (einmalig)</td><td>{{ '%.2f'|format(r.ruestkosten) }} €</td></tr>
     </table>
 
-    <h3 class="total">Gesamtkosten für {{ r.stueckzahl }} Stück: {{ '%.2f'|format(r.gesamtkosten) }} €</h3>
+    <h3 class="total">Gesamtkosten für {{ r.stueckzahl }} Stück (unverbindliche Kalkulation): {{ '%.2f'|format(r.gesamtkosten) }} €</h3>
+    <p class="hint">{{ netto_hinweis }} Diese Berechnung ist ein unverbindlicher Richtwert, kein verbindliches Angebot.</p>
 
     <a href="{{ url_for('index') }}" class="button">Nächstes Teil berechnen</a>
     <a href="{{ url_for('export_pdf') }}" class="button secondary-button">PDF exportieren</a>
 </section>
 
 <section class="card">
-    <h2>Auftrag senden</h2>
+    <h2>Unverbindliches Angebot anfordern</h2>
     {% if not mail_configured %}
-        <p class="hint">E-Mail-Versand ist noch nicht eingerichtet. Bitte den Betreiber kontaktieren, um dieses Teil in Auftrag zu geben.</p>
+        <p class="hint">E-Mail-Versand ist noch nicht eingerichtet. Bitte den Betreiber kontaktieren, um zu diesem Teil ein unverbindliches Angebot anzufordern.</p>
     {% elif gesendet %}
-        <p class="ok">Ihr Auftrag wurde per E-Mail an uns gesendet. Wir melden uns bei Ihnen.</p>
+        <p class="ok">Ihre unverbindliche Anfrage wurde per E-Mail an uns gesendet. Wir melden uns mit einem Angebot bei Ihnen.</p>
     {% else %}
-        <p class="hint">Teil und Kalkulation (PDF{% if r.geo.width_mm is not none %} + Original-DXF{% endif %}) per E-Mail an uns senden, damit wir den Zuschnitt starten können.</p>
+        <p class="hint">Teil und Kalkulation (PDF{% if r.geo.width_mm is not none %} + Original-DXF{% endif %}) per E-Mail an uns senden, um ein unverbindliches Angebot anzufordern. Es entsteht dadurch noch kein Vertrag.</p>
         <form action="{{ url_for('auftrag_senden') }}" method="post">
             <label>Ihr Name:
                 <input type="text" name="kunde_name">
@@ -71,7 +72,7 @@
             <label>Anmerkung:
                 <textarea name="kunde_notiz" rows="3"></textarea>
             </label>
-            <button type="submit">Auftrag per E-Mail senden</button>
+            <button type="submit">Unverbindliches Angebot anfordern</button>
         </form>
     {% endif %}
 </section>

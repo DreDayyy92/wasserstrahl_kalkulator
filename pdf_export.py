@@ -7,6 +7,7 @@ from __future__ import annotations
 from fpdf import FPDF
 
 LABEL_W = 95
+NETTO_HINWEIS = "Alle Preise sind Nettopreise zzgl. der gesetzlichen Mehrwertsteuer."
 
 
 def _row(pdf: FPDF, label: str, value: str, bold: bool = False) -> None:
@@ -27,7 +28,7 @@ def build_pdf(result: dict, dateiname: str, preview_png_path: str | None = None)
     pdf.add_page()
 
     pdf.set_font("helvetica", "B", 16)
-    pdf.cell(0, 10, "Wasserstrahl-Kalkulation", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 10, "Wasserstrahl-Kalkulation (unverbindlich)", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("helvetica", "", 11)
     pdf.cell(0, 7, f"Teil: {dateiname}", new_x="LMARGIN", new_y="NEXT")
     pdf.cell(0, 7, f"Stueckzahl: {result['stueckzahl']}", new_x="LMARGIN", new_y="NEXT")
@@ -73,5 +74,8 @@ def build_pdf(result: dict, dateiname: str, preview_png_path: str | None = None)
         f"Gesamtkosten fuer {result['stueckzahl']} Stueck: {result['gesamtkosten']:.2f} EUR",
         new_x="LMARGIN", new_y="NEXT",
     )
+    pdf.set_font("helvetica", "", 9)
+    pdf.cell(0, 6, NETTO_HINWEIS, new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, "Unverbindlicher Richtwert, kein verbindliches Angebot.", new_x="LMARGIN", new_y="NEXT")
 
     return bytes(pdf.output())

@@ -3,10 +3,26 @@
 
 <section class="card">
     <h2>Teil berechnen</h2>
+    <p class="hint">Unverbindliche Kostenschätzung - kein verbindliches Angebot.</p>
 
-    {% if not has_materials %}
+    {% if not legal_ack %}
+        <div class="legal-gate">
+            <p>Bevor Sie den Rechner nutzen können, lesen Sie bitte
+                <a href="{{ url_for('datenschutz') }}" target="_blank" rel="noopener">Datenschutzerklärung</a>,
+                <a href="{{ url_for('impressum') }}" target="_blank" rel="noopener">Impressum</a> und
+                <a href="{{ url_for('agb') }}" target="_blank" rel="noopener">AGB</a>.</p>
+            <form action="{{ url_for('rechtliches_bestaetigen') }}" method="post">
+                <label class="checkbox-inline">
+                    <input type="checkbox" required>
+                    Ich habe Datenschutzerklärung, Impressum und AGB gelesen und verstanden.
+                </label>
+                <button type="submit">Bestätigen und fortfahren</button>
+            </form>
+        </div>
+    {% elif not has_materials %}
         <p class="hint">Es ist noch keine Materialliste hinterlegt. Bitte den Betreiber kontaktieren, bevor eine Berechnung möglich ist.</p>
     {% else %}
+    <p class="hint">{{ netto_hinweis }}</p>
     <form action="{{ url_for('berechnen') }}" method="post" enctype="multipart/form-data">
 
         <fieldset>
@@ -26,8 +42,12 @@
 
         <fieldset id="modus_dxf_wrap">
             <legend>DXF-Datei</legend>
+            <label class="checkbox-inline">
+                <input type="checkbox" id="rechte_bestaetigt_cb" name="rechte_bestaetigt" onchange="toggleDxfUpload()">
+                Ich bestätige, dass ich zur Nutzung dieser Datei berechtigt bin und dadurch keine Rechte Dritter (z.B. Urheber- oder Schutzrechte) verletzt werden.
+            </label>
             <label>Bauteil-DXF:
-                <input type="file" name="dxf_file" id="dxf_file" accept=".dxf" onchange="loadDxfPreview()">
+                <input type="file" name="dxf_file" id="dxf_file" accept=".dxf" onchange="loadDxfPreview()" disabled>
             </label>
             <div id="dxf_preview_wrap" class="dxf-preview-wrap" hidden>
                 <div id="dxf_preview_svg" class="dxf-preview"></div>
@@ -52,6 +72,7 @@
 
         <fieldset>
             <legend>Material</legend>
+            <p class="hint">{{ netto_hinweis }}</p>
             <label class="checkbox-inline">
                 <input type="checkbox" name="material_berechnen" id="material_berechnen" checked>
                 Materialkosten mitberechnen (abwählen bei Beistellmaterial des Kunden – Material trotzdem auswählen für die richtige Schnittgeschwindigkeit)
@@ -228,6 +249,11 @@ function toggleLayerVisibility(layerName, visible) {
             el.style.display = visible ? '' : 'none';
         }
     });
+}
+
+function toggleDxfUpload() {
+    const cb = document.getElementById('rechte_bestaetigt_cb');
+    document.getElementById('dxf_file').disabled = !cb.checked;
 }
 
 function toggleBerechnungsart() {

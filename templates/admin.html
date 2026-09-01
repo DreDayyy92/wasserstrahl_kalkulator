@@ -46,4 +46,27 @@
         </form>
     {% endif %}
 </section>
+
+<section class="card">
+    <h2>Rechtliches (Impressum, Datenschutz, AGB)</h2>
+    <p class="hint">
+        Freitext, wird 1:1 auf den jeweiligen öffentlichen Seiten angezeigt
+        (verlinkt im Footer jeder Seite). Der Kunde muss diese Texte vor der
+        ersten Nutzung des Rechners bestätigen. Inhaltlich liegt die
+        Verantwortung beim Betreiber - im Zweifel einen Impressum-/
+        Datenschutz-Generator oder eine Rechtsberatung nutzen.
+    </p>
+    <form action="{{ url_for('admin_rechtstexte_save') }}" method="post">
+        <label>Impressum:
+            <textarea name="impressum" rows="8">{{ legal.impressum }}</textarea>
+        </label>
+        <label>Datenschutzerklärung:
+            <textarea name="datenschutz" rows="8">{{ legal.datenschutz }}</textarea>
+        </label>
+        <label>AGB:
+            <textarea name="agb" rows="8">{{ legal.agb }}</textarea>
+        </label>
+        <button type="submit">Speichern</button>
+    </form>
+</section>
 {% endblock %}

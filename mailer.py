@@ -1,8 +1,9 @@
 """
-Versendet den berechneten Auftrag (PDF + ggf. Original-DXF) per E-Mail an den
-Betreiber. Alle Zugangsdaten (SMTP-Host, Benutzer, Passwort, Zieladresse)
-kommen ausschliesslich aus Umgebungsvariablen (siehe .env.example) - so
-landen sie nie im Quellcode und damit auch nie im Git-Repo/auf GitHub.
+Versendet eine unverbindliche Angebotsanfrage (PDF + ggf. Original-DXF) per
+E-Mail an den Betreiber - kein verbindlicher Auftrag. Alle Zugangsdaten
+(SMTP-Host, Benutzer, Passwort, Zieladresse) kommen ausschliesslich aus
+Umgebungsvariablen (siehe .env.example) - so landen sie nie im Quellcode und
+damit auch nie im Git-Repo/auf GitHub.
 """
 from __future__ import annotations
 
@@ -17,7 +18,7 @@ def is_configured() -> bool:
     return bool(os.environ.get("SMTP_HOST") and os.environ.get("MAIL_TO"))
 
 
-def send_order_email(
+def send_offer_request_email(
     result: dict,
     dateiname: str,
     dxf_path: str | None,
@@ -34,21 +35,21 @@ def send_order_email(
     mail_to = os.environ["MAIL_TO"]
 
     msg = EmailMessage()
-    msg["Subject"] = f"Neuer Schneidauftrag: {dateiname}"
+    msg["Subject"] = f"Unverbindliche Angebotsanfrage: {dateiname}"
     msg["From"] = mail_from
     msg["To"] = mail_to
     if kunde_email:
         msg["Reply-To"] = kunde_email
 
     lines = [
-        "Neuer Auftrag ueber den Wasserstrahl-Kalkulator.",
+        "Unverbindliche Angebotsanfrage ueber den Wasserstrahl-Kalkulator.",
         "",
         f"Teil: {dateiname}",
         f"Stueckzahl: {result.get('stueckzahl')}",
         f"Material: {result.get('material_name')} ({result.get('dicke_mm')} mm)",
         f"Schnittqualitaet: {result.get('schnittqualitaet_label')}",
         f"Schnittgeschwindigkeit: {result.get('schnittgeschwindigkeit_effektiv')} mm/min",
-        f"Gesamtkosten: {result.get('gesamtkosten'):.2f} EUR",
+        f"Gesamtkosten: {result.get('gesamtkosten'):.2f} EUR (netto, zzgl. gesetzlicher MwSt.)",
     ]
     if kunde_name or kunde_email:
         lines += ["", "Kunde:"]

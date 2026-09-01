@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card">
+    <h2>{{ title }}</h2>
+    {% if text %}
+        <div class="legal-text">{{ text }}</div>
+    {% else %}
+        <p class="hint">Noch nicht hinterlegt. Bitte den Betreiber kontaktieren.</p>
+    {% endif %}
+    <a href="{{ url_for('index') }}" class="button secondary-button">Zurück</a>
+</section>
+{% endblock %}

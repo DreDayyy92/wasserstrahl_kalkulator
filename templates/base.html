@@ -20,6 +20,9 @@
         {% block content %}{% endblock %}
     </main>
     <footer>
+        <a href="{{ url_for('impressum') }}">Impressum</a>
+        <a href="{{ url_for('datenschutz') }}">Datenschutz</a>
+        <a href="{{ url_for('agb') }}">AGB</a>
         {% if session.is_admin %}
             <a href="{{ url_for('admin_dashboard') }}">Admin-Bereich</a>
             <form action="{{ url_for('admin_logout') }}" method="post" class="inline-form">

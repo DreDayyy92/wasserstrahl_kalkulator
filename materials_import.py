@@ -1,9 +1,14 @@
 """
 Import einer einfachen Materialliste als CSV: Material, Stärke (mm),
-Schnittgeschwindigkeit (mm/min), Preis (€/kg) - eine Zeile pro
-Material/Stärke-Kombination. Ersetzt den früheren DATANORM-Import: keine
-Spaltenzuordnung nötig, die Spalten werden anhand der Kopfzeile erkannt
-(Groß-/Kleinschreibung und übliche Schreibvarianten egal).
+Schnittgeschwindigkeit (mm/min), Preis (€/kg), optional Dichte (g/cm³) -
+eine Zeile pro Material/Stärke-Kombination. Ersetzt den früheren
+DATANORM-Import: keine Spaltenzuordnung nötig, die Spalten werden anhand der
+Kopfzeile erkannt (Groß-/Kleinschreibung und übliche Schreibvarianten egal).
+
+Preis, Schnittgeschwindigkeit und Dichte werden serverseitig ausschließlich
+aus dieser Liste gelesen (siehe app.py: berechnen()) - Kunden wählen nur ein
+Material aus und können diese Werte nicht über das Formular überschreiben,
+nur der Admin über diese CSV.
 
 CSV statt Excel, damit keine zusätzliche Bibliothek (openpyxl) nötig ist -
 Excel kann CSV-Dateien direkt öffnen, bearbeiten und speichern.
@@ -22,6 +27,8 @@ SCHNITTGESCHW_ALIASES = {
     "geschwindigkeit_mm_min", "geschwindigkeit", "vmax",
 }
 PREIS_ALIASES = {"preis_pro_kg", "preis_kg", "preis", "price", "preis_eur_kg"}
+DICHTE_ALIASES = {"dichte_g_cm3", "dichte", "dichte_g_cm", "density"}
+DICHTE_DEFAULT = 7.85  # Baustahl, falls keine Dichte-Spalte vorhanden ist
 
 
 def _normalize_header(name: str) -> str:
@@ -78,11 +85,13 @@ def parse_csv(filepath: str) -> list[dict]:
     staerke_idx = find_col(STAERKE_ALIASES)
     geschw_idx = find_col(SCHNITTGESCHW_ALIASES)
     preis_idx = find_col(PREIS_ALIASES)
+    dichte_idx = find_col(DICHTE_ALIASES)
 
     if name_idx < 0:
         raise ValueError(
             "Keine 'Material'-Spalte gefunden. Erwartete Spalten: "
-            "Material, Staerke_mm, Schnittgeschwindigkeit_mm_min, Preis_pro_kg."
+            "Material, Staerke_mm, Schnittgeschwindigkeit_mm_min, Preis_pro_kg, "
+            "optional Dichte_g_cm3."
         )
 
     materials = []
@@ -103,6 +112,7 @@ def parse_csv(filepath: str) -> list[dict]:
                 "staerke_mm": _to_float(get(staerke_idx)) if staerke_idx >= 0 else 0.0,
                 "schnittgeschwindigkeit_mm_min": _to_float(get(geschw_idx)) if geschw_idx >= 0 else 0.0,
                 "preis_pro_kg": _to_float(get(preis_idx)) if preis_idx >= 0 else 0.0,
+                "dichte_g_cm3": _to_float(get(dichte_idx), DICHTE_DEFAULT) if dichte_idx >= 0 else DICHTE_DEFAULT,
             }
         )
     return materials
@@ -111,9 +121,9 @@ def parse_csv(filepath: str) -> list[dict]:
 def build_template_csv() -> str:
     """Beispiel-CSV zum Download, damit das erwartete Format klar ist."""
     lines = [
-        "Material;Staerke_mm;Schnittgeschwindigkeit_mm_min;Preis_pro_kg",
-        "Baustahl S235;5;500;1.20",
-        "Edelstahl 1.4301;3;350;4.50",
-        "Alu AlMg3;4;800;3.10",
+        "Material;Staerke_mm;Schnittgeschwindigkeit_mm_min;Preis_pro_kg;Dichte_g_cm3",
+        "Baustahl S235;5;500;1.20;7.85",
+        "Edelstahl 1.4301;3;350;4.50;7.90",
+        "Alu AlMg3;4;800;3.10;2.70",
     ]
     return "\r\n".join(lines) + "\r\n"

@@ -40,9 +40,8 @@ def build_pdf(result: dict, dateiname: str) -> bytes:
     _row(pdf, "Gesamt-Schnittlaenge", f"{geo.get('total_cut_length_mm', 0)} mm")
 
     _section(pdf, "Material" + ("" if result["material_berechnet"] else " (Beistellmaterial des Kunden)"))
+    _row(pdf, "Material", f"{result.get('material_name', '-')} ({result['dicke_mm']} mm)")
     if result["material_berechnet"]:
-        _row(pdf, "Dicke", f"{result['dicke_mm']} mm")
-        _row(pdf, "Dichte", f"{result['dichte']} g/cm3")
         _row(pdf, "Gewicht pro Teil", f"{result['gewicht_kg']} kg")
         _row(pdf, "Preis/kg", f"{result['material_preis_pro_kg']:.2f} EUR")
         _row(pdf, "Materialkosten pro Teil", f"{result['materialkosten']:.2f} EUR")
@@ -51,6 +50,8 @@ def build_pdf(result: dict, dateiname: str) -> bytes:
         _row(pdf, "Materialkosten", "0.00 EUR (vom Kunden gestellt)")
 
     _section(pdf, "Maschine")
+    if result.get("schnittqualitaet_label"):
+        _row(pdf, "Schnittqualitaet", result["schnittqualitaet_label"])
     _row(pdf, "Einstiche", str(result.get("einstiche", "-")))
     _row(pdf, "Schnittzeit", f"{result['schnittzeit_min']} min")
     _row(pdf, "Einstechzeit gesamt", f"{result['einstechzeit_min']} min")

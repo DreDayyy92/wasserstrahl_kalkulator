@@ -5,9 +5,6 @@
     <h2>Feste Kostenparameter</h2>
     <p class="hint">Diese Werte sieht/ändert der Kunde nicht - sie fließen automatisch in jede Berechnung ein.</p>
     <form action="{{ url_for('admin_settings_save') }}" method="post">
-        <label>Geschnittener Anteil der Listen-Schnittgeschwindigkeit (%, meist ~50%):
-            <input type="number" step="1" min="1" max="150" name="schnittgeschwindigkeit_prozent" value="{{ settings.schnittgeschwindigkeit_prozent }}">
-        </label>
         <label>Maschinenstundensatz (€/h):
             <input type="number" step="0.01" name="maschinenstundensatz_eur" value="{{ settings.maschinenstundensatz_eur }}">
         </label>
@@ -24,8 +21,8 @@
 <section class="card">
     <h2>Materialliste (CSV)</h2>
     <p class="hint">
-        Spalten: <code>Material;Staerke_mm;Schnittgeschwindigkeit_mm_min;Preis_pro_kg</code>
-        – eine Zeile pro Material/Stärke-Kombination.
+        Spalten: <code>Material;Staerke_mm;Schnittgeschwindigkeit_mm_min;Preis_pro_kg;Dichte_g_cm3</code>
+        (Dichte optional, Standard 7.85) – eine Zeile pro Material/Stärke-Kombination.
         <a href="{{ url_for('materialien_vorlage') }}">Vorlage herunterladen</a>.
     </p>
     {% if has_materials %}

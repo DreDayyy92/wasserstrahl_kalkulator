@@ -21,21 +21,22 @@
     </table>
 
     <h3>Material{% if not r.material_berechnet %} <small>(Beistellmaterial des Kunden)</small>{% endif %}</h3>
-    {% if r.material_berechnet %}
-        <table class="result-table">
-            <tr><td>Dicke</td><td>{{ r.dicke_mm }} mm</td></tr>
-            <tr><td>Dichte</td><td>{{ r.dichte }} g/cm³</td></tr>
+    <table class="result-table">
+        <tr><td>Material</td><td>{{ r.material_name }} ({{ r.dicke_mm }} mm)</td></tr>
+        {% if r.material_berechnet %}
             <tr><td>Gewicht</td><td>{{ r.gewicht_kg }} kg</td></tr>
             <tr><td>Preis/kg</td><td>{{ '%.2f'|format(r.material_preis_pro_kg) }} €</td></tr>
             <tr><td>Materialkosten pro Teil</td><td>{{ '%.2f'|format(r.materialkosten) }} €</td></tr>
             <tr class="highlight"><td>Materialkosten × {{ r.stueckzahl }}</td><td>{{ '%.2f'|format(r.materialkosten_gesamt) }} €</td></tr>
-        </table>
-    {% else %}
+        {% endif %}
+    </table>
+    {% if not r.material_berechnet %}
         <p class="hint">Kein Material berechnet – Kunde bringt eigenes Blech mit.</p>
     {% endif %}
 
     <h3>Maschine</h3>
     <table class="result-table">
+        <tr><td>Schnittqualität</td><td>{{ r.schnittqualitaet_label }}</td></tr>
         <tr><td>Einstiche</td><td>{{ r.einstiche }}</td></tr>
         <tr><td>Schnittzeit</td><td>{{ r.schnittzeit_min }} min</td></tr>
         <tr><td>Einstechzeit gesamt</td><td>{{ r.einstechzeit_min }} min</td></tr>

@@ -3,6 +3,10 @@
 
 <section class="card">
     <h2>Teil berechnen</h2>
+
+    {% if not has_materials %}
+        <p class="hint">Es ist noch keine Materialliste hinterlegt. Bitte den Betreiber kontaktieren, bevor eine Berechnung möglich ist.</p>
+    {% else %}
     <form action="{{ url_for('berechnen') }}" method="post" enctype="multipart/form-data">
 
         <fieldset>
@@ -52,48 +56,50 @@
                 <input type="checkbox" name="material_berechnen" id="material_berechnen" checked>
                 Materialkosten mitberechnen (abwählen bei Beistellmaterial des Kunden – Material trotzdem auswählen für die richtige Schnittgeschwindigkeit)
             </label>
-            <div id="material_fields_wrap">
-                {% if has_materials %}
-                    <label>Material suchen:
-                        <input type="text" id="material_search" placeholder="Materialname..." oninput="filterMaterials()">
-                    </label>
-                    <label>Material aus Liste (füllt Dicke, Schnittgeschwindigkeit und Preis/kg unten):
-                        <select id="material_select" onchange="fillMaterial()">
-                            <option value="">— manuell eingeben —</option>
-                            {% for m in materials %}
-                                <option
-                                    value="{{ m.preis_pro_kg }}"
-                                    data-staerke="{{ m.staerke_mm }}"
-                                    data-schnittgeschw="{{ m.schnittgeschwindigkeit_mm_min }}"
-                                    data-search="{{ m.name|lower }}"
-                                >
-                                    {{ m.name }} ({{ m.staerke_mm }} mm, {{ '%.2f'|format(m.preis_pro_kg) }} €/kg)
-                                </option>
-                            {% endfor %}
-                        </select>
-                    </label>
-                {% endif %}
-                <label>Materialdicke (mm):
-                    <input type="number" step="0.01" name="dicke_mm" id="dicke_mm_field">
-                </label>
-                <label>Dichte (g/cm³, Baustahl 7.85 / Edelstahl 7.9 / Alu 2.7):
-                    <input type="number" step="0.01" name="dichte_g_cm3" value="{{ settings.dichte_g_cm3 or 7.85 }}">
-                </label>
-                <label>Materialpreis pro kg (€):
-                    <input type="number" step="0.01" name="material_preis_pro_kg" id="material_preis_pro_kg" value="0">
-                </label>
-            </div>
+            <label>Material suchen:
+                <input type="text" id="material_search" placeholder="Materialname..." oninput="filterMaterials()">
+            </label>
+            <label>Material auswählen:
+                <select id="material_select" name="material_index" onchange="fillMaterial()" required>
+                    <option value="" disabled selected>— Material wählen —</option>
+                    {% for m in materials %}
+                        <option
+                            value="{{ loop.index0 }}"
+                            data-staerke="{{ m.staerke_mm }}"
+                            data-schnittgeschw="{{ m.schnittgeschwindigkeit_mm_min }}"
+                            data-preis="{{ m.preis_pro_kg }}"
+                            data-search="{{ m.name|lower }}"
+                        >
+                            {{ m.name }} ({{ m.staerke_mm }} mm, {{ '%.2f'|format(m.preis_pro_kg) }} €/kg)
+                        </option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>Materialdicke (mm):
+                <input type="number" step="0.01" name="dicke_mm" id="dicke_mm_field">
+            </label>
+            <label>Materialpreis pro kg (€) <small>(vom Betreiber festgelegt)</small>:
+                <input type="number" step="0.01" id="material_preis_pro_kg_field" value="" disabled>
+            </label>
         </fieldset>
 
         <fieldset>
             <legend>Schneiden</legend>
-            <label>Schnittgeschwindigkeit (mm/min):
-                <input type="number" step="1" name="schnittgeschwindigkeit_mm_min" id="schnittgeschwindigkeit_field" value="500">
+            <label>Schnittgeschwindigkeit lt. Material (mm/min) <small>(vom Betreiber festgelegt)</small>:
+                <input type="number" id="schnittgeschwindigkeit_field" value="" disabled>
             </label>
+            <label>Schnittqualität:</label>
+            {% for key, q in schnittqualitaet.items() %}
+                <label class="radio-inline">
+                    <input type="radio" name="schnittqualitaet" value="{{ key }}" {% if key == schnittqualitaet_default %}checked{% endif %}>
+                    {{ q.label }} ({{ q.prozent }}%)
+                </label>
+            {% endfor %}
         </fieldset>
 
         <button type="submit">Kosten berechnen</button>
     </form>
+    {% endif %}
 </section>
 
 <script>
@@ -102,7 +108,9 @@ function fillMaterial() {
     const opt = sel.selectedOptions[0];
     if (!opt || !opt.value) return;
 
-    document.getElementById('material_preis_pro_kg').value = parseFloat(opt.value).toFixed(2);
+    if (opt.dataset.preis) {
+        document.getElementById('material_preis_pro_kg_field').value = parseFloat(opt.dataset.preis).toFixed(2);
+    }
     if (opt.dataset.staerke) {
         document.getElementById('dicke_mm_field').value = opt.dataset.staerke;
     }
@@ -116,7 +124,7 @@ function filterMaterials() {
     const sel = document.getElementById('material_select');
     let firstVisible = null;
     for (const opt of sel.options) {
-        if (!opt.dataset.search) continue; // "— manuell eingeben —" immer sichtbar lassen
+        if (!opt.dataset.search) continue; // Platzhalter-Option immer sichtbar lassen
         const match = !query || opt.dataset.search.includes(query);
         opt.hidden = !match;
         if (match && !firstVisible) firstVisible = opt;

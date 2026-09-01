@@ -59,11 +59,22 @@ app.secret_key = _load_or_create_secret_key()
 
 # Werden nur vom Admin (Login) gesetzt - Kunden sehen/ändern diese nicht.
 DEFAULT_SETTINGS = {
-    "schnittgeschwindigkeit_prozent": 50,  # in der Praxis wird meist mit ~50% des Listenwerts geschnitten
     "maschinenstundensatz_eur": 45.0,
     "ruestzeit_min": 10.0,
     "einstechzeit_s": 15,
 }
+
+# Schnittqualität: fester Anteil der Listen-Schnittgeschwindigkeit des
+# gewählten Materials. Vom Kunden auswählbar (im Gegensatz zu Preis/
+# Geschwindigkeit selbst, die aus der Materialliste kommen und nicht
+# änderbar sind), da es eine reine Qualitäts-/Zeit-Abwägung für den Kunden
+# ist, keine interne Preiskalkulation.
+SCHNITTQUALITAET = {
+    "fein": {"label": "Feinschnitt", "prozent": 50},
+    "mittel": {"label": "Mittelschnitt", "prozent": 75},
+    "trenn": {"label": "Trennschnitt", "prozent": 100},
+}
+SCHNITTQUALITAET_DEFAULT = "fein"
 
 
 def admin_required(view):
@@ -101,12 +112,12 @@ def _cleanup_old_results(max_age_seconds: int = 24 * 3600) -> None:
 @app.route("/")
 def index():
     materials = storage.load_json(MATERIALS_PATH, default=[])
-    settings = storage.load_json(SETTINGS_PATH, default=DEFAULT_SETTINGS)
     return render_template(
         "index.html",
         materials=materials,
-        settings=settings,
         has_materials=len(materials) > 0,
+        schnittqualitaet=SCHNITTQUALITAET,
+        schnittqualitaet_default=SCHNITTQUALITAET_DEFAULT,
     )
 
 
@@ -211,19 +222,36 @@ def berechnen():
 
     material_berechnet = request.form.get("material_berechnen") == "on"
 
-    dicke_mm = to_float("dicke_mm", 0.0)
-    dichte = to_float("dichte_g_cm3", admin_settings.get("dichte_g_cm3", 7.85))
-    # Schnittgeschwindigkeit aus Material/Liste ist ein Nennwert (100%). In der
-    # Praxis wird nur ein Teil davon gefahren - der Anteil ist ausschließlich
-    # vom Admin einstellbar, nicht vom Kunden.
-    schnittgeschwindigkeit_basis = to_float(
-        "schnittgeschwindigkeit_mm_min",
-        DEFAULT_SETTINGS.get("schnittgeschwindigkeit_mm_min", 500),
-    )
-    schnittgeschwindigkeit_prozent = admin_settings.get(
-        "schnittgeschwindigkeit_prozent", DEFAULT_SETTINGS["schnittgeschwindigkeit_prozent"]
-    )
-    schnittgeschw = schnittgeschwindigkeit_basis * (schnittgeschwindigkeit_prozent / 100)
+    # Material ausschließlich serverseitig aus der Admin-Liste nachschlagen -
+    # Preis, Schnittgeschwindigkeit und Dichte kommen NIE aus dem Formular,
+    # sonst könnte jeder per direktem POST eigene Preise unterschieben.
+    materials = storage.load_json(MATERIALS_PATH, default=[])
+    material = None
+    material_index_raw = request.form.get("material_index", "").strip()
+    if material_index_raw != "":
+        try:
+            idx = int(material_index_raw)
+            if 0 <= idx < len(materials):
+                material = materials[idx]
+        except ValueError:
+            pass
+
+    if material is None:
+        flash("Bitte ein Material aus der Liste auswählen.")
+        return redirect(url_for("index"))
+
+    # Dicke darf der Kunde anpassen (reale Blechdicke kann leicht vom
+    # Listenwert abweichen), Preis/Geschwindigkeit/Dichte nicht.
+    dicke_mm = to_float("dicke_mm", material["staerke_mm"])
+    dichte = material.get("dichte_g_cm3", 7.85)
+    material_preis_pro_kg = material["preis_pro_kg"]
+    schnittgeschwindigkeit_basis = material["schnittgeschwindigkeit_mm_min"]
+
+    schnittqualitaet_key = request.form.get("schnittqualitaet", SCHNITTQUALITAET_DEFAULT)
+    if schnittqualitaet_key not in SCHNITTQUALITAET:
+        schnittqualitaet_key = SCHNITTQUALITAET_DEFAULT
+    schnittqualitaet_prozent = SCHNITTQUALITAET[schnittqualitaet_key]["prozent"]
+    schnittgeschw = schnittgeschwindigkeit_basis * (schnittqualitaet_prozent / 100)
 
     # Feste, vom Admin hinterlegte Kostenparameter - der Kunde sieht/ändert
     # diese nicht über das Formular.
@@ -231,7 +259,6 @@ def berechnen():
     ruestzeit_min = admin_settings.get("ruestzeit_min", DEFAULT_SETTINGS["ruestzeit_min"])
     einstechzeit_s = admin_settings.get("einstechzeit_s", DEFAULT_SETTINGS["einstechzeit_s"])
 
-    material_preis_pro_kg = to_float("material_preis_pro_kg", 0.0)
     stueckzahl = max(1, int(to_float("stueckzahl", 1)))
 
     # --- Blechverbrauch ---
@@ -267,10 +294,12 @@ def berechnen():
         "geo": geo,
         "svg_preview": svg_preview,
         "material_berechnet": material_berechnet,
+        "material_name": material["name"],
         "dicke_mm": dicke_mm,
         "dichte": dichte,
         "gewicht_kg": round(gewicht_kg, 3),
         "material_preis_pro_kg": material_preis_pro_kg,
+        "schnittqualitaet_label": SCHNITTQUALITAET[schnittqualitaet_key]["label"],
         "stueckzahl": stueckzahl,
         "materialkosten": round(materialkosten, 2),
         "materialkosten_gesamt": round(materialkosten_gesamt, 2),
@@ -380,9 +409,6 @@ def admin_settings_save():
             return default
 
     settings = {
-        "schnittgeschwindigkeit_prozent": to_float(
-            "schnittgeschwindigkeit_prozent", DEFAULT_SETTINGS["schnittgeschwindigkeit_prozent"]
-        ),
         "maschinenstundensatz_eur": to_float(
             "maschinenstundensatz_eur", DEFAULT_SETTINGS["maschinenstundensatz_eur"]
         ),

@@ -5,8 +5,6 @@ venv/
 instance/
 uploads/
 
-# Enthaelt echte SMTP-Zugangsdaten/Mailadressen - niemals committen.
-# Vorlage dafuer ist .env.example (die bleibt im Repo).
 .env
 
 # Reste von frueheren PyInstaller-Builds, falls mal wieder gebaut wird

@@ -1,4 +1,5 @@
 import os
+import random
 import secrets
 import shutil
 import time
@@ -7,6 +8,7 @@ from functools import wraps
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request, redirect, url_for, flash, Response, session
+from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.security import generate_password_hash, check_password_hash
 
 import dxf_analyzer as dxf
@@ -70,6 +72,7 @@ DEFAULT_SETTINGS = {
     "maschinenstundensatz_eur": 45.0,
     "ruestzeit_min": 10.0,
     "einstechzeit_s": 15,
+    "max_upload_mb": 20,
 }
 
 # Schnittqualität: fester Anteil der Listen-Schnittgeschwindigkeit des
@@ -92,6 +95,28 @@ DEFAULT_LEGAL = {"impressum": "", "datenschutz": "", "agb": ""}
 # Wird überall dort angezeigt, wo Preise erscheinen (Formular, Ergebnis,
 # PDF, Auftrags-Mail) - alle berechneten Preise sind Nettopreise.
 NETTO_HINWEIS = "Alle Preise sind Nettopreise zzgl. der gesetzlichen Mehrwertsteuer."
+
+
+@app.before_request
+def _apply_upload_limit():
+    # Admin-konfigurierbar (siehe /admin/settings) statt fest im Code - liest
+    # settings.json bei jedem Request neu, damit eine Änderung ohne Neustart
+    # wirkt. Werkzeug prüft MAX_CONTENT_LENGTH beim Einlesen des Request-Body,
+    # danach greift automatisch RequestEntityTooLarge (siehe Errorhandler).
+    settings = storage.load_json(SETTINGS_PATH, default=DEFAULT_SETTINGS)
+    max_mb = settings.get("max_upload_mb", DEFAULT_SETTINGS["max_upload_mb"])
+    app.config["MAX_CONTENT_LENGTH"] = int(max_mb * 1024 * 1024)
+
+
+@app.errorhandler(RequestEntityTooLarge)
+def handle_upload_too_large(e):
+    settings = storage.load_json(SETTINGS_PATH, default=DEFAULT_SETTINGS)
+    max_mb = settings.get("max_upload_mb", DEFAULT_SETTINGS["max_upload_mb"])
+    message = f"Datei ist zu groß (maximal {max_mb:.0f} MB erlaubt)."
+    if request.path == url_for("dxf_preview"):
+        return jsonify({"error": message}), 413
+    flash(message)
+    return redirect(url_for("index"))
 
 
 def admin_required(view):
@@ -120,6 +145,15 @@ def _session_dxf_path() -> str:
     """Kopie der zuletzt berechneten DXF pro Session - wird nur gebraucht,
     damit der Kunde sie beim Senden per Mail als Anhang mitschicken kann."""
     return os.path.join(RESULTS_DIR, f"{_session_uid()}.dxf")
+
+
+def _new_captcha() -> tuple[int, int]:
+    """Einfache, selbst gehostete Rechenaufgabe statt Google reCAPTCHA o.ae. -
+    kein Drittanbieter, keine Zugangsdaten noetig; schuetzt den Mailversand
+    vor simplen Spam-Bots (nicht vor gezielten Angriffen)."""
+    a, b = random.randint(1, 9), random.randint(1, 9)
+    session["captcha_answer"] = a + b
+    return a, b
 
 
 def _session_preview_path() -> str:
@@ -199,6 +233,8 @@ def dxf_preview():
     dxf_file = request.files.get("dxf_file")
     if not dxf_file or dxf_file.filename == "":
         return jsonify({"error": "Keine Datei angegeben."}), 400
+    if not dxf_file.filename.lower().endswith(".dxf"):
+        return jsonify({"error": "Bitte eine DXF-Datei (.dxf) hochladen."}), 400
 
     filename = f"preview_{uuid.uuid4().hex}.dxf"
     filepath = os.path.join(UPLOAD_DIR, filename)
@@ -272,6 +308,9 @@ def berechnen():
         dxf_file = request.files.get("dxf_file")
         if not dxf_file or dxf_file.filename == "":
             flash("Bitte eine DXF-Datei hochladen.")
+            return redirect(url_for("index"))
+        if not dxf_file.filename.lower().endswith(".dxf"):
+            flash("Bitte eine DXF-Datei (.dxf) hochladen.")
             return redirect(url_for("index"))
 
         if request.form.get("rechte_bestaetigt") != "on":
@@ -411,11 +450,14 @@ def berechnen():
     _cleanup_old_results()
     storage.save_json({"result": result, "dateiname": dateiname}, _session_result_path())
 
+    captcha_a, captcha_b = _new_captcha()
     return render_template(
         "result.html",
         r=result,
         dateiname=dateiname,
         mail_configured=mailer.is_configured(),
+        captcha_a=captcha_a,
+        captcha_b=captcha_b,
         netto_hinweis=NETTO_HINWEIS,
     )
 
@@ -460,6 +502,26 @@ def auftrag_senden():
             "result.html", r=result, dateiname=dateiname, mail_configured=False, netto_hinweis=NETTO_HINWEIS
         )
 
+    captcha_antwort = request.form.get("captcha_antwort", "").strip()
+    try:
+        captcha_ok = int(captcha_antwort) == session.get("captcha_answer")
+    except ValueError:
+        captcha_ok = False
+
+    if not captcha_ok:
+        flash("Sicherheitsfrage falsch beantwortet. Bitte erneut versuchen.")
+        captcha_a, captcha_b = _new_captcha()
+        return render_template(
+            "result.html",
+            r=result,
+            dateiname=dateiname,
+            mail_configured=True,
+            captcha_a=captcha_a,
+            captcha_b=captcha_b,
+            netto_hinweis=NETTO_HINWEIS,
+        )
+    session.pop("captcha_answer", None)
+
     dxf_path = _session_dxf_path()
     if not os.path.exists(dxf_path):
         dxf_path = None
@@ -478,9 +540,27 @@ def auftrag_senden():
         )
     except Exception as e:
         flash(f"E-Mail konnte nicht gesendet werden: {e}")
+        captcha_a, captcha_b = _new_captcha()
         return render_template(
-            "result.html", r=result, dateiname=dateiname, mail_configured=True, netto_hinweis=NETTO_HINWEIS
+            "result.html",
+            r=result,
+            dateiname=dateiname,
+            mail_configured=True,
+            captcha_a=captcha_a,
+            captcha_b=captcha_b,
+            netto_hinweis=NETTO_HINWEIS,
         )
+
+    # Bestaetigung an den Kunden ist ein Best-effort-Extra - schlaegt sie
+    # fehl, ist die eigentliche Anfrage an den Betreiber trotzdem schon raus,
+    # das soll dem Kunden nicht als Fehler angezeigt werden.
+    bestaetigung_gesendet = False
+    if kunde_email:
+        try:
+            mailer.send_customer_confirmation_email(result, dateiname, preview_path, kunde_name, kunde_email)
+            bestaetigung_gesendet = True
+        except Exception:
+            pass
 
     flash("Unverbindliche Anfrage wurde per E-Mail gesendet.")
     return render_template(
@@ -489,6 +569,7 @@ def auftrag_senden():
         dateiname=dateiname,
         mail_configured=True,
         gesendet=True,
+        bestaetigung_gesendet=bestaetigung_gesendet,
         netto_hinweis=NETTO_HINWEIS,
     )
 
@@ -573,6 +654,7 @@ def admin_settings_save():
         ),
         "ruestzeit_min": to_float("ruestzeit_min", DEFAULT_SETTINGS["ruestzeit_min"]),
         "einstechzeit_s": to_float("einstechzeit_s", DEFAULT_SETTINGS["einstechzeit_s"]),
+        "max_upload_mb": max(1, to_float("max_upload_mb", DEFAULT_SETTINGS["max_upload_mb"])),
     }
     storage.save_json(settings, SETTINGS_PATH)
     flash("Einstellungen gespeichert.")

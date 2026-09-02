@@ -14,6 +14,9 @@
         <label>Rüstzeit (min):
             <input type="number" step="0.5" name="ruestzeit_min" value="{{ settings.ruestzeit_min }}">
         </label>
+        <label>Maximale Upload-Größe (MB) <small>(für DXF- und Material-CSV-Uploads)</small>:
+            <input type="number" step="1" min="1" name="max_upload_mb" value="{{ settings.max_upload_mb }}">
+        </label>
         <button type="submit">Speichern</button>
     </form>
 </section>

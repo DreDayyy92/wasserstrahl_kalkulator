@@ -59,18 +59,21 @@
     {% if not mail_configured %}
         <p class="hint">E-Mail-Versand ist noch nicht eingerichtet. Bitte den Betreiber kontaktieren, um zu diesem Teil ein unverbindliches Angebot anzufordern.</p>
     {% elif gesendet %}
-        <p class="ok">Ihre unverbindliche Anfrage wurde per E-Mail an uns gesendet. Wir melden uns mit einem Angebot bei Ihnen.</p>
+        <p class="ok">Ihre unverbindliche Anfrage wurde per E-Mail an uns gesendet. Wir melden uns mit einem Angebot bei Ihnen.{% if bestaetigung_gesendet %} Eine Bestätigung mit einer Kopie der Kalkulation haben wir zusätzlich an Ihre E-Mail-Adresse geschickt.{% endif %}</p>
     {% else %}
         <p class="hint">Teil und Kalkulation (PDF{% if r.geo.width_mm is not none %} + Original-DXF{% endif %}) per E-Mail an uns senden, um ein unverbindliches Angebot anzufordern. Es entsteht dadurch noch kein Vertrag.</p>
         <form action="{{ url_for('auftrag_senden') }}" method="post">
             <label>Ihr Name:
                 <input type="text" name="kunde_name">
             </label>
-            <label>Ihre E-Mail-Adresse (für Rückfragen):
+            <label>Ihre E-Mail-Adresse (für Rückfragen &amp; Bestätigung):
                 <input type="email" name="kunde_email">
             </label>
             <label>Anmerkung:
                 <textarea name="kunde_notiz" rows="3"></textarea>
+            </label>
+            <label>Sicherheitsfrage: Was ist {{ captcha_a }} + {{ captcha_b }}?
+                <input type="text" inputmode="numeric" name="captcha_antwort" required>
             </label>
             <button type="submit">Unverbindliches Angebot anfordern</button>
         </form>

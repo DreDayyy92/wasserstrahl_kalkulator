@@ -18,6 +18,18 @@ def is_configured() -> bool:
     return bool(os.environ.get("SMTP_HOST") and os.environ.get("MAIL_TO"))
 
 
+def _send(msg: EmailMessage) -> None:
+    host = os.environ["SMTP_HOST"]
+    port = int(os.environ.get("SMTP_PORT", "587"))
+    username = os.environ.get("SMTP_USERNAME", "")
+    password = os.environ.get("SMTP_PASSWORD", "")
+    with smtplib.SMTP(host, port, timeout=20) as smtp:
+        smtp.starttls()
+        if username:
+            smtp.login(username, password)
+        smtp.send_message(msg)
+
+
 def send_offer_request_email(
     result: dict,
     dateiname: str,
@@ -27,10 +39,7 @@ def send_offer_request_email(
     kunde_email: str,
     kunde_notiz: str,
 ) -> None:
-    host = os.environ["SMTP_HOST"]
-    port = int(os.environ.get("SMTP_PORT", "587"))
     username = os.environ.get("SMTP_USERNAME", "")
-    password = os.environ.get("SMTP_PASSWORD", "")
     mail_from = os.environ.get("MAIL_FROM") or username
     mail_to = os.environ["MAIL_TO"]
 
@@ -76,8 +85,52 @@ def send_offer_request_email(
             png_bytes = f.read()
         msg.add_attachment(png_bytes, maintype="image", subtype="png", filename="vorschau.png")
 
-    with smtplib.SMTP(host, port, timeout=20) as smtp:
-        smtp.starttls()
-        if username:
-            smtp.login(username, password)
-        smtp.send_message(msg)
+    _send(msg)
+
+
+def send_customer_confirmation_email(
+    result: dict,
+    dateiname: str,
+    preview_png_path: str | None,
+    kunde_name: str,
+    kunde_email: str,
+) -> None:
+    """Bestaetigung an den Kunden selbst (nur wenn er eine E-Mail-Adresse
+    angegeben hat) - eigene Kopie der Kalkulation, kein verbindliches
+    Angebot. Best-effort: wird vom Aufrufer separat von der eigentlichen
+    Anfrage an den Betreiber behandelt, ein Fehler hier soll die bereits
+    erfolgreich verschickte Anfrage nicht ungeschehen machen."""
+    username = os.environ.get("SMTP_USERNAME", "")
+    mail_from = os.environ.get("MAIL_FROM") or username
+    mail_to_shop = os.environ.get("MAIL_TO") or mail_from
+
+    msg = EmailMessage()
+    msg["Subject"] = f"Ihre Anfrage: {dateiname}"
+    msg["From"] = mail_from
+    msg["To"] = kunde_email
+    msg["Reply-To"] = mail_to_shop
+
+    anrede = f"Hallo {kunde_name}," if kunde_name else "Hallo,"
+    lines = [
+        anrede,
+        "",
+        "vielen Dank fuer Ihre unverbindliche Anfrage ueber unseren "
+        "Wasserstrahl-Kalkulator. Wir haben sie erhalten und melden uns "
+        "zeitnah mit einem Angebot bei Ihnen.",
+        "",
+        f"Teil: {dateiname}",
+        f"Stueckzahl: {result.get('stueckzahl')}",
+        f"Material: {result.get('material_name')} ({result.get('dicke_mm')} mm)",
+        f"Geschaetzte Gesamtkosten: {result.get('gesamtkosten'):.2f} EUR "
+        "(netto, unverbindlich - kein verbindliches Angebot)",
+        "",
+        "Im Anhang finden Sie eine Kopie der Kalkulation als PDF.",
+        "",
+        "Mit freundlichen Gruessen",
+    ]
+    msg.set_content("\n".join(lines))
+
+    pdf_bytes = pdf_export.build_pdf(result, dateiname, preview_png_path)
+    msg.add_attachment(pdf_bytes, maintype="application", subtype="pdf", filename="kalkulation.pdf")
+
+    _send(msg)

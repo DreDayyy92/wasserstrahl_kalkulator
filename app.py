@@ -658,7 +658,10 @@ def admin_login():
 
     if request.method == "POST":
         password = request.form.get("password", "")
-        if check_password_hash(admin_data["password_hash"], password):
+        employee_hash = admin_data.get("employee_password_hash")
+        if check_password_hash(admin_data["password_hash"], password) or (
+            employee_hash and check_password_hash(employee_hash, password)
+        ):
             session["is_admin"] = True
             return redirect(url_for("admin_dashboard"))
         flash("Falsches Passwort.")
@@ -678,11 +681,13 @@ def admin_dashboard():
     groups = _load_material_groups()
     settings = storage.load_json(SETTINGS_PATH, default=DEFAULT_SETTINGS)
     legal = _load_legal()
+    admin_data = storage.load_json(ADMIN_PATH, default={})
     return render_template(
         "admin.html",
         groups=groups,
         settings=settings,
         legal=legal,
+        has_employee_password=bool(admin_data.get("employee_password_hash")),
     )
 
 
@@ -718,6 +723,35 @@ def admin_rechtstexte_save():
     }
     storage.save_json(legal, LEGAL_PATH)
     flash("Rechtliches gespeichert.")
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/mitarbeiterpasswort", methods=["POST"])
+@admin_required
+def admin_mitarbeiterpasswort_save():
+    admin_data = storage.load_json(ADMIN_PATH, default={})
+
+    if request.form.get("action") == "entfernen":
+        admin_data.pop("employee_password_hash", None)
+        storage.save_json(admin_data, ADMIN_PATH)
+        flash("Mitarbeiterpasswort entfernt.")
+        return redirect(url_for("admin_dashboard"))
+
+    password = request.form.get("password", "")
+    password2 = request.form.get("password2", "")
+    if len(password) < 4:
+        flash("Mitarbeiterpasswort muss mindestens 4 Zeichen haben.")
+        return redirect(url_for("admin_dashboard"))
+    if password != password2:
+        flash("Mitarbeiterpasswörter stimmen nicht überein.")
+        return redirect(url_for("admin_dashboard"))
+    if check_password_hash(admin_data["password_hash"], password):
+        flash("Mitarbeiterpasswort darf nicht mit deinem eigenen Passwort übereinstimmen.")
+        return redirect(url_for("admin_dashboard"))
+
+    admin_data["employee_password_hash"] = generate_password_hash(password)
+    storage.save_json(admin_data, ADMIN_PATH)
+    flash("Mitarbeiterpasswort gespeichert.")
     return redirect(url_for("admin_dashboard"))
 
 

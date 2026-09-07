@@ -118,6 +118,30 @@
 </section>
 
 <section class="card">
+    <h2>Mitarbeiter-Zugang</h2>
+    <p class="hint">
+        Eigenes Passwort für Mitarbeiter, mit vollem Zugriff auf diesen
+        Admin-Bereich - ohne dass du dein eigenes Passwort weitergeben musst.
+        {% if has_employee_password %}Aktuell ist ein Mitarbeiterpasswort hinterlegt.{% else %}Aktuell ist kein Mitarbeiterpasswort hinterlegt.{% endif %}
+    </p>
+    <form action="{{ url_for('admin_mitarbeiterpasswort_save') }}" method="post">
+        <label>{% if has_employee_password %}Neues Mitarbeiterpasswort{% else %}Mitarbeiterpasswort{% endif %}:
+            <input type="password" name="password" minlength="4">
+        </label>
+        <label>Passwort wiederholen:
+            <input type="password" name="password2" minlength="4">
+        </label>
+        <button type="submit">{% if has_employee_password %}Passwort ändern{% else %}Passwort setzen{% endif %}</button>
+    </form>
+    {% if has_employee_password %}
+        <form action="{{ url_for('admin_mitarbeiterpasswort_save') }}" method="post" class="inline-form">
+            <input type="hidden" name="action" value="entfernen">
+            <button type="submit" class="secondary">Mitarbeiterpasswort entfernen</button>
+        </form>
+    {% endif %}
+</section>
+
+<section class="card">
     <h2>Rechtliches (Impressum, Datenschutz, AGB)</h2>
     <p class="hint">
         Impressum und Datenschutzerklärung werden auf die Haupt-Domain

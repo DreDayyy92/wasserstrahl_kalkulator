@@ -202,7 +202,16 @@ def _load_material_groups() -> list[dict]:
     404. Wird hier eine Gruppe gespeichert, fallen die alten Einträge dabei
     automatisch raus."""
     raw = storage.load_json(MATERIALS_PATH, default=[])
-    return [g for g in raw if isinstance(g, dict) and "id" in g and "staerken" in g]
+    groups = [g for g in raw if isinstance(g, dict) and "id" in g and "staerken" in g]
+
+    # Anzeige-Reihenfolge statt Eintragungsreihenfolge: sonst landen Stärken
+    # so in Auswahl/Admin-Liste, wie sie zufällig eingetragen wurden (z.B.
+    # 3mm, 10mm, 1mm) statt aufsteigend sortiert.
+    for g in groups:
+        g["staerken"] = sorted(g.get("staerken", []), key=lambda st: st.get("staerke_mm", 0))
+    groups.sort(key=lambda g: g.get("gruppe", "").lower())
+
+    return groups
 
 
 def _flatten_materials(groups: list[dict]) -> list[dict]:

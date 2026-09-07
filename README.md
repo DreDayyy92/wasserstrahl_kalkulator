@@ -1,8 +1,9 @@
 # Wasserstrahl-Kalkulator
 
 Lokale Flask-Web-App zur Kostenberechnung für Wasserstrahl-Zuschnitte:
-Materialpreise (CSV-Import) + DXF-Bauteilgeometrie (Bounding Box + Schnittlänge)
-oder manuelle Schnittlänge → Material- und Maschinenkosten, inkl. PDF-Export.
+Materialverwaltung im Admin-Bereich + DXF-Bauteilgeometrie (Bounding Box +
+Schnittlänge) oder manuelle Schnittlänge → Material- und Maschinenkosten,
+inkl. PDF-Export.
 
 ## Installation
 
@@ -113,21 +114,21 @@ eigenes Thema, sag Bescheid, wenn wir das als Nächstes angehen sollen.
      direkt eingeben, ohne DXF-Datei (Einstiche können hier naturgemäß nicht
      automatisch erkannt werden).
 2. **Parameter eingeben**: Stückzahl, Material aus der Liste auswählen
-   (Preis/kg, Dichte und Listen-Schnittgeschwindigkeit kommen dabei fest aus
-   der Admin-Materialliste und sind nicht änderbar; nur die tatsächliche
+   (Preis/kg, Dichte und Schnittgeschwindigkeit kommen dabei fest aus der
+   Admin-Materialverwaltung und sind nicht änderbar; nur die tatsächliche
    Blechdicke lässt sich leicht anpassen), sowie Schnittqualität
    (Feinschnitt 50 % / Mittelschnitt 75 % / Trennschnitt 100 % der Listen-
    Schnittgeschwindigkeit). Über eine Checkbox lässt sich die
    Materialberechnung ganz abschalten (Kunde bringt eigenes Blech mit).
 3. **Berechnen** → Ergebnisseite mit Aufschlüsselung: Materialkosten,
    Maschinenkosten je Stückzahl, Rüstkosten (einmalig), Gesamtkosten – inkl.
-   PDF-Export und "Auftrag per E-Mail senden" (siehe unten). Jeder Besucher
-   sieht nur seine eigene letzte Berechnung (Session-Cookie, kein Login
-   nötig) - Maschinenstundensatz, Rüstzeit und Einstechzeit je Einstich sind
-   fest hinterlegt (siehe Admin-Bereich) und werden dem Kunden nicht
-   angezeigt. **Alle angezeigten/berechneten Preise sind Nettopreise** (zzgl.
-   gesetzlicher Mehrwertsteuer) - der Hinweis erscheint im Formular, auf der
-   Ergebnisseite, im PDF und in der Auftrags-Mail.
+   PDF-Export und "Unverbindliches Angebot anfordern" (siehe unten). Jeder
+   Besucher sieht nur seine eigene letzte Berechnung (Session-Cookie, kein
+   Login nötig) - Maschinenstundensatz, Rüstzeit und die (materialabhängige)
+   Einstechzeit je Stärke sind fest hinterlegt (siehe Admin-Bereich) und
+   werden dem Kunden nicht angezeigt. **Alle angezeigten/berechneten Preise
+   sind Nettopreise** (zzgl. gesetzlicher Mehrwertsteuer) - der Hinweis
+   erscheint im Formular, auf der Ergebnisseite, im PDF und in der Mail.
 
 ## Admin-Bereich
 
@@ -135,15 +136,17 @@ eigenes Thema, sag Bescheid, wenn wir das als Nächstes angehen sollen.
 Aufruf wird einmalig ein Passwort festgelegt (`instance/admin.json`, nur ein
 gehashtes Passwort, kein Klartext); danach normaler Login. Dort:
 
-- **Feste Kostenparameter**: Maschinenstundensatz, Rüstzeit, Einstechzeit je
-  Einstich - diese Werte sieht/ändert der Kunde nicht, sie fließen aber in
-  jede Berechnung ein.
-- **Materialliste (CSV)**: `Material;Staerke_mm;Schnittgeschwindigkeit_mm_min;Preis_pro_kg;Dichte_g_cm3`
-  (Dichte optional, Standard 7.85), eine Zeile pro Material/Stärke-
-  Kombination. Vorlage zum Download in der App. Nur der Admin kann sie
-  hochladen/löschen; Kunden können daraus nur auswählen, Preis/Geschwindigkeit/
-  Dichte kommen ausschließlich aus dieser Liste und sind für den Kunden nicht
-  änderbar.
+- **Feste Kostenparameter**: Maschinenstundensatz, Rüstzeit, maximale
+  Upload-Größe - diese Werte sieht/ändert der Kunde nicht, sie fließen aber
+  in jede Berechnung ein.
+- **Materialien**: direkt in der App gepflegt (kein CSV-Import mehr). Jede
+  **Materialgruppe** (z.B. "VA" für Edelstahl) hat einen Namen, Preis/kg und
+  eine Dichte, die für alle ihre Stärken gelten. Darunter beliebig viele
+  **Stärken** mit jeweils eigener Schnittgeschwindigkeit und Einstechzeit
+  (beides hängt von der Blechdicke ab). Gruppen und Stärken lassen sich
+  einzeln anlegen, bearbeiten und löschen; Kunden können aus den Stärken nur
+  auswählen, alle Werte kommen ausschließlich aus dieser Verwaltung und sind
+  für den Kunden nicht änderbar.
 - **Rechtliches (Impressum, Datenschutz, AGB)**: Impressum und
   Datenschutzerklärung sind Links auf die Haupt-Domain (`/impressum` und
   `/datenschutz` leiten dorthin weiter, im Footer jeder Seite verlinkt) -
@@ -217,7 +220,6 @@ docker-compose.yml       Build + Start inkl. Volumes für instance/ und uploads/
 .env.example             Vorlage für SMTP-Zugangsdaten (echte Werte in .env, nicht im Git-Repo)
 app.py                  Flask-Routen
 storage.py                JSON-Persistenz-Helfer
-materials_import.py      Material-CSV-Einlesen (Material/Stärke/Geschw./Preis/Dichte)
 dxf_analyzer.py           DXF-Bounding-Box, Schnittlängen- und SVG-Vorschau-Berechnung
 pdf_export.py             PDF-Kalkulationsblatt (fpdf2)
 mailer.py                 Versand des Auftrags (PDF + DXF) per E-Mail an den Betreiber

@@ -8,13 +8,10 @@
         <label>Maschinenstundensatz (€/h):
             <input type="number" step="0.01" name="maschinenstundensatz_eur" value="{{ settings.maschinenstundensatz_eur }}">
         </label>
-        <label>Einstechzeit je Einstich (s):
-            <input type="number" step="1" name="einstechzeit_s" value="{{ settings.einstechzeit_s }}">
-        </label>
         <label>Rüstzeit (min):
             <input type="number" step="0.5" name="ruestzeit_min" value="{{ settings.ruestzeit_min }}">
         </label>
-        <label>Maximale Upload-Größe (MB) <small>(für DXF- und Material-CSV-Uploads)</small>:
+        <label>Maximale Upload-Größe (MB) <small>(für DXF-Uploads)</small>:
             <input type="number" step="1" min="1" name="max_upload_mb" value="{{ settings.max_upload_mb }}">
         </label>
         <button type="submit">Speichern</button>
@@ -22,30 +19,97 @@
 </section>
 
 <section class="card">
-    <h2>Materialliste (CSV)</h2>
+    <h2>Materialien</h2>
     <p class="hint">
-        Spalten: <code>Material;Staerke_mm;Schnittgeschwindigkeit_mm_min;Preis_pro_kg;Dichte_g_cm3</code>
-        (Dichte optional, Standard 7.85) – eine Zeile pro Material/Stärke-Kombination.
-        <a href="{{ url_for('materialien_vorlage') }}">Vorlage herunterladen</a>.
+        Jede Materialgruppe (z.B. "VA" für Edelstahl) hat einen Preis/kg und
+        eine Dichte, die für alle ihre Stärken gelten. Schnittgeschwindigkeit
+        und Einstechzeit werden pro Stärke einzeln hinterlegt, da beides mit
+        der Blechdicke variiert.
     </p>
-    {% if has_materials %}
-        <p class="ok">{{ materials|length }} Materialien geladen.</p>
-        <form action="{{ url_for('materialien_upload') }}" method="post" enctype="multipart/form-data" class="inline-form">
-            <label>Neue Material-CSV importieren:
-                <input type="file" name="materialien_file" accept=".csv" required>
-            </label>
-            <button type="submit">Importieren</button>
-        </form>
+
+    <h3>Neue Materialgruppe anlegen</h3>
+    <form action="{{ url_for('material_gruppe_neu') }}" method="post">
+        <label>Name (z.B. VA, Baustahl, Alu):
+            <input type="text" name="gruppe" required>
+        </label>
+        <label>Preis pro kg (€):
+            <input type="number" step="0.01" min="0" name="preis_pro_kg" required>
+        </label>
+        <label>Dichte (g/cm³):
+            <input type="number" step="0.01" min="0" name="dichte_g_cm3" value="7.85">
+        </label>
+        <button type="submit">Gruppe anlegen</button>
+    </form>
+
+    {% if not groups %}
+        <p class="hint">Noch keine Materialgruppe angelegt.</p>
+    {% endif %}
+
+    {% for g in groups %}
+        <fieldset>
+            <legend>{{ g.gruppe }}</legend>
+
+            <form action="{{ url_for('material_gruppe_bearbeiten', gruppe_id=g.id) }}" method="post">
+                <label>Name:
+                    <input type="text" name="gruppe" value="{{ g.gruppe }}">
+                </label>
+                <label>Preis pro kg (€):
+                    <input type="number" step="0.01" min="0" name="preis_pro_kg" value="{{ g.preis_pro_kg }}">
+                </label>
+                <label>Dichte (g/cm³):
+                    <input type="number" step="0.01" min="0" name="dichte_g_cm3" value="{{ g.dichte_g_cm3 }}">
+                </label>
+                <button type="submit">Gruppe speichern</button>
+            </form>
+            <form action="{{ url_for('material_gruppe_loeschen', gruppe_id=g.id) }}" method="post" class="inline-form">
+                <button type="submit" class="secondary">Gruppe löschen</button>
+            </form>
+
+            {% if g.staerken %}
+                <div class="table-scroll">
+                    <table>
+                        <tr>
+                            <th>Stärke (mm)</th>
+                            <th>Schnittgeschw. (mm/min)</th>
+                            <th>Einstechzeit (s)</th>
+                            <th></th>
+                        </tr>
+                        {% for st in g.staerken %}
+                            <tr>
+                                <td>{{ st.staerke_mm }}</td>
+                                <td>{{ st.schnittgeschwindigkeit_mm_min }}</td>
+                                <td>{{ st.einstechzeit_s }}</td>
+                                <td>
+                                    <form action="{{ url_for('material_staerke_loeschen', gruppe_id=g.id, idx=loop.index0) }}" method="post" class="inline-form">
+                                        <button type="submit" class="link-button">Löschen</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </table>
+                </div>
+            {% else %}
+                <p class="hint">Noch keine Stärke hinterlegt.</p>
+            {% endif %}
+
+            <form action="{{ url_for('material_staerke_neu', gruppe_id=g.id) }}" method="post">
+                <label>Stärke (mm):
+                    <input type="number" step="0.1" min="0" name="staerke_mm" required>
+                </label>
+                <label>Schnittgeschwindigkeit (mm/min):
+                    <input type="number" step="1" min="0" name="schnittgeschwindigkeit_mm_min" required>
+                </label>
+                <label>Einstechzeit (s):
+                    <input type="number" step="1" min="0" name="einstechzeit_s" value="15" required>
+                </label>
+                <button type="submit">Stärke hinzufügen</button>
+            </form>
+        </fieldset>
+    {% endfor %}
+
+    {% if groups %}
         <form action="{{ url_for('materialien_reset') }}" method="post" class="inline-form">
-            <button type="submit" class="secondary">Materialliste löschen</button>
-        </form>
-    {% else %}
-        <p>Noch keine Materialliste importiert.</p>
-        <form action="{{ url_for('materialien_upload') }}" method="post" enctype="multipart/form-data">
-            <label>Material-CSV-Datei:
-                <input type="file" name="materialien_file" accept=".csv" required>
-            </label>
-            <button type="submit">Hochladen</button>
+            <button type="submit" class="secondary">Alle Materialien löschen</button>
         </form>
     {% endif %}
 </section>

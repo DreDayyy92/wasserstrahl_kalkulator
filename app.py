@@ -13,7 +13,6 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 import dxf_analyzer as dxf
 import mailer
-import materials_import
 import pdf_export
 import storage
 
@@ -71,9 +70,12 @@ app.secret_key = _load_or_create_secret_key()
 DEFAULT_SETTINGS = {
     "maschinenstundensatz_eur": 45.0,
     "ruestzeit_min": 10.0,
-    "einstechzeit_s": 15,
     "max_upload_mb": 20,
 }
+
+# Fallback fuer Materialien aus einer aelteren Version ohne eigene
+# Einstechzeit je Staerke.
+DEFAULT_EINSTECHZEIT_S = 15
 
 # Schnittqualität: fester Anteil der Listen-Schnittgeschwindigkeit des
 # gewählten Materials. Vom Kunden auswählbar (im Gegensatz zu Preis/
@@ -167,6 +169,26 @@ def _session_preview_path() -> str:
     return os.path.join(RESULTS_DIR, f"{_session_uid()}.png")
 
 
+def _flatten_materials(groups: list[dict]) -> list[dict]:
+    """Wandelt die im Admin-Bereich gepflegte Gruppen-Struktur (Hauptgruppe
+    z.B. "VA" + mehrere Stärken je eigener Schnittgeschwindigkeit/
+    Einstechzeit) in eine flache Liste um - ein Eintrag pro Material/Stärke-
+    Kombination, wie sie das Kundenformular (Dropdown) und /berechnen per
+    Index erwarten."""
+    flat = []
+    for gruppe in groups:
+        for st in gruppe.get("staerken", []):
+            flat.append({
+                "name": gruppe.get("gruppe", ""),
+                "staerke_mm": st.get("staerke_mm", 0),
+                "schnittgeschwindigkeit_mm_min": st.get("schnittgeschwindigkeit_mm_min", 0),
+                "einstechzeit_s": st.get("einstechzeit_s", DEFAULT_EINSTECHZEIT_S),
+                "preis_pro_kg": gruppe.get("preis_pro_kg", 0.0),
+                "dichte_g_cm3": gruppe.get("dichte_g_cm3", 7.85),
+            })
+    return flat
+
+
 def _load_legal() -> dict:
     """Mergt gespeicherte Werte über die Defaults, damit einzelne noch nie
     gespeicherte Felder (z.B. nach diesem Update neu hinzugekommene URL-
@@ -190,7 +212,7 @@ def _cleanup_old_results(max_age_seconds: int = 24 * 3600) -> None:
 # --------------------------------------------------------------------------
 @app.route("/")
 def index():
-    materials = storage.load_json(MATERIALS_PATH, default=[])
+    materials = _flatten_materials(storage.load_json(MATERIALS_PATH, default=[]))
     return render_template(
         "index.html",
         materials=materials,
@@ -364,9 +386,10 @@ def berechnen():
     material_berechnet = request.form.get("material_berechnen") == "on"
 
     # Material ausschließlich serverseitig aus der Admin-Liste nachschlagen -
-    # Preis, Schnittgeschwindigkeit und Dichte kommen NIE aus dem Formular,
-    # sonst könnte jeder per direktem POST eigene Preise unterschieben.
-    materials = storage.load_json(MATERIALS_PATH, default=[])
+    # Preis, Schnittgeschwindigkeit, Einstechzeit und Dichte kommen NIE aus
+    # dem Formular, sonst könnte jeder per direktem POST eigene Preise
+    # unterschieben.
+    materials = _flatten_materials(storage.load_json(MATERIALS_PATH, default=[]))
     material = None
     material_index_raw = request.form.get("material_index", "").strip()
     if material_index_raw != "":
@@ -398,7 +421,10 @@ def berechnen():
     # diese nicht über das Formular.
     stundensatz = admin_settings.get("maschinenstundensatz_eur", DEFAULT_SETTINGS["maschinenstundensatz_eur"])
     ruestzeit_min = admin_settings.get("ruestzeit_min", DEFAULT_SETTINGS["ruestzeit_min"])
-    einstechzeit_s = admin_settings.get("einstechzeit_s", DEFAULT_SETTINGS["einstechzeit_s"])
+    # Einstechzeit haengt von der Materialstaerke ab (dickeres Blech braucht
+    # laenger zum Einstechen) - kommt deshalb aus der gewaehlten Staerke,
+    # nicht mehr aus einer globalen Einstellung.
+    einstechzeit_s = material.get("einstechzeit_s", DEFAULT_EINSTECHZEIT_S)
 
     stueckzahl = max(1, int(to_float("stueckzahl", 1)))
 
@@ -585,8 +611,9 @@ def auftrag_senden():
 
 
 # --------------------------------------------------------------------------
-# Admin-Bereich: Materialliste (CSV) und feste Kostenparameter, die Kunden
-# nicht sehen/ändern sollen. Kein Login für normale Nutzung nötig - nur hier.
+# Admin-Bereich: Materialgruppen (mit Stärken) und feste Kostenparameter,
+# die Kunden nicht sehen/ändern sollen. Kein Login für normale Nutzung
+# nötig - nur hier.
 # --------------------------------------------------------------------------
 @app.route("/admin/setup", methods=["GET", "POST"])
 def admin_setup():
@@ -636,13 +663,12 @@ def admin_logout():
 @app.route("/admin")
 @admin_required
 def admin_dashboard():
-    materials = storage.load_json(MATERIALS_PATH, default=[])
+    groups = storage.load_json(MATERIALS_PATH, default=[])
     settings = storage.load_json(SETTINGS_PATH, default=DEFAULT_SETTINGS)
     legal = _load_legal()
     return render_template(
         "admin.html",
-        materials=materials,
-        has_materials=len(materials) > 0,
+        groups=groups,
         settings=settings,
         legal=legal,
     )
@@ -663,7 +689,6 @@ def admin_settings_save():
             "maschinenstundensatz_eur", DEFAULT_SETTINGS["maschinenstundensatz_eur"]
         ),
         "ruestzeit_min": to_float("ruestzeit_min", DEFAULT_SETTINGS["ruestzeit_min"]),
-        "einstechzeit_s": to_float("einstechzeit_s", DEFAULT_SETTINGS["einstechzeit_s"]),
         "max_upload_mb": max(1, to_float("max_upload_mb", DEFAULT_SETTINGS["max_upload_mb"])),
     }
     storage.save_json(settings, SETTINGS_PATH)
@@ -684,44 +709,96 @@ def admin_rechtstexte_save():
     return redirect(url_for("admin_dashboard"))
 
 
-@app.route("/admin/materialien/upload", methods=["POST"])
-@admin_required
-def materialien_upload():
-    file = request.files.get("materialien_file")
-    if not file or file.filename == "":
-        flash("Bitte eine Material-CSV-Datei auswählen.")
-        return redirect(url_for("admin_dashboard"))
-
-    filename = f"materialien_{uuid.uuid4().hex}.csv"
-    filepath = os.path.join(UPLOAD_DIR, filename)
-    file.save(filepath)
-
+def _to_float_form(name, default=0.0):
+    val = request.form.get(name, "").strip().replace(",", ".")
     try:
-        materials = materials_import.parse_csv(filepath)
-    except Exception as e:
-        flash(f"CSV konnte nicht gelesen werden: {e}")
-        return redirect(url_for("admin_dashboard"))
-    finally:
-        os.remove(filepath)
+        return float(val)
+    except ValueError:
+        return default
 
-    if not materials:
-        flash("Keine Materialien in der Datei gefunden.")
+
+@app.route("/admin/materialien/gruppe/neu", methods=["POST"])
+@admin_required
+def material_gruppe_neu():
+    name = request.form.get("gruppe", "").strip()
+    if not name:
+        flash("Bitte einen Namen für die Materialgruppe angeben.")
         return redirect(url_for("admin_dashboard"))
 
-    storage.save_json(materials, MATERIALS_PATH)
-    flash(f"{len(materials)} Materialien importiert.")
+    groups = storage.load_json(MATERIALS_PATH, default=[])
+    groups.append({
+        "id": uuid.uuid4().hex,
+        "gruppe": name,
+        "preis_pro_kg": _to_float_form("preis_pro_kg", 0.0),
+        "dichte_g_cm3": _to_float_form("dichte_g_cm3", 7.85),
+        "staerken": [],
+    })
+    storage.save_json(groups, MATERIALS_PATH)
+    flash(f"Materialgruppe '{name}' angelegt.")
     return redirect(url_for("admin_dashboard"))
 
 
-@app.route("/admin/materialien/vorlage")
+@app.route("/admin/materialien/gruppe/<gruppe_id>/bearbeiten", methods=["POST"])
 @admin_required
-def materialien_vorlage():
-    csv_text = materials_import.build_template_csv()
-    return Response(
-        csv_text,
-        mimetype="text/csv",
-        headers={"Content-Disposition": "attachment; filename=materialien_vorlage.csv"},
-    )
+def material_gruppe_bearbeiten(gruppe_id):
+    groups = storage.load_json(MATERIALS_PATH, default=[])
+    for g in groups:
+        if g.get("id") == gruppe_id:
+            name = request.form.get("gruppe", "").strip()
+            if name:
+                g["gruppe"] = name
+            g["preis_pro_kg"] = _to_float_form("preis_pro_kg", g.get("preis_pro_kg", 0.0))
+            g["dichte_g_cm3"] = _to_float_form("dichte_g_cm3", g.get("dichte_g_cm3", 7.85))
+            break
+    storage.save_json(groups, MATERIALS_PATH)
+    flash("Materialgruppe aktualisiert.")
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/materialien/gruppe/<gruppe_id>/loeschen", methods=["POST"])
+@admin_required
+def material_gruppe_loeschen(gruppe_id):
+    groups = storage.load_json(MATERIALS_PATH, default=[])
+    groups = [g for g in groups if g.get("id") != gruppe_id]
+    storage.save_json(groups, MATERIALS_PATH)
+    flash("Materialgruppe gelöscht.")
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/materialien/gruppe/<gruppe_id>/staerke/neu", methods=["POST"])
+@admin_required
+def material_staerke_neu(gruppe_id):
+    groups = storage.load_json(MATERIALS_PATH, default=[])
+    for g in groups:
+        if g.get("id") == gruppe_id:
+            g.setdefault("staerken", []).append({
+                "staerke_mm": _to_float_form("staerke_mm", 0.0),
+                "schnittgeschwindigkeit_mm_min": _to_float_form("schnittgeschwindigkeit_mm_min", 0.0),
+                "einstechzeit_s": _to_float_form("einstechzeit_s", DEFAULT_EINSTECHZEIT_S),
+            })
+            break
+    else:
+        flash("Materialgruppe nicht gefunden.")
+        return redirect(url_for("admin_dashboard"))
+
+    storage.save_json(groups, MATERIALS_PATH)
+    flash("Stärke hinzugefügt.")
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/materialien/gruppe/<gruppe_id>/staerke/<int:idx>/loeschen", methods=["POST"])
+@admin_required
+def material_staerke_loeschen(gruppe_id, idx):
+    groups = storage.load_json(MATERIALS_PATH, default=[])
+    for g in groups:
+        if g.get("id") == gruppe_id:
+            staerken = g.get("staerken", [])
+            if 0 <= idx < len(staerken):
+                staerken.pop(idx)
+            break
+    storage.save_json(groups, MATERIALS_PATH)
+    flash("Stärke entfernt.")
+    return redirect(url_for("admin_dashboard"))
 
 
 @app.route("/admin/materialien/reset", methods=["POST"])
@@ -729,7 +806,7 @@ def materialien_vorlage():
 def materialien_reset():
     if os.path.exists(MATERIALS_PATH):
         os.remove(MATERIALS_PATH)
-    flash("Materialliste gelöscht.")
+    flash("Alle Materialien gelöscht.")
     return redirect(url_for("admin_dashboard"))
 
 

@@ -62,7 +62,7 @@ def send_offer_request_email(
         msg["Reply-To"] = kunde_email
 
     lines = [
-        "Unverbindliche Angebotsanfrage ueber den Wasserstrahl-Kalkulator.",
+        "Unverbindliche Angebotsanfrage über den Wasserstrahl-Kalkulator.",
         "",
         f"Teil: {dateiname}",
         f"Stueckzahl: {result.get('stueckzahl')}",
@@ -127,9 +127,9 @@ def send_customer_confirmation_email(
     lines = [
         anrede,
         "",
-        "vielen Dank fuer Ihre unverbindliche Anfrage ueber unseren "
-        "Wasserstrahl-Kalkulator. Wir haben sie erhalten und melden uns "
-        "zeitnah mit einem Angebot bei Ihnen.",
+        "vielen Dank für Ihre Anfrage über unseren Kalkulator."
+        "Wir haben ihre Daten erhalten und prüfen diese umgehend. "
+        "Sie erhalten in Kürze ein verbindliches Angebotvon uns. ",
         "",
         f"Teil: {dateiname}",
         f"Stueckzahl: {result.get('stueckzahl')}",
@@ -139,7 +139,7 @@ def send_customer_confirmation_email(
         "",
         "Im Anhang finden Sie eine Kopie der Kalkulation als PDF.",
         "",
-        "Mit freundlichen Gruessen",
+        "Mit freundlichen Grüßen",
     ]
     msg.set_content("\n".join(lines))
 

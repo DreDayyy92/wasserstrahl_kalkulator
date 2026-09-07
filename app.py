@@ -87,10 +87,15 @@ SCHNITTQUALITAET = {
 }
 SCHNITTQUALITAET_DEFAULT = "fein"
 
-# Rechtstexte werden ausschließlich vom Admin gepflegt (Freitext), nicht von
-# uns vorformuliert - Impressum/Datenschutz/AGB sind rechtlich bindend und
-# müssen inhaltlich vom Betreiber (ggf. mit Generator/Anwalt) stammen.
-DEFAULT_LEGAL = {"impressum": "", "datenschutz": "", "agb": ""}
+# Impressum/Datenschutz verlinken auf die Haupt-Domain (dort zentral
+# gepflegt); nur die AGB werden als Freitext direkt in der App verwaltet.
+# Rechtlich bindende Inhalte müssen vom Betreiber stammen (ggf. mit
+# Generator/Anwalt), wir formulieren hier nichts vor.
+DEFAULT_LEGAL = {
+    "impressum_url": "https://www.baeckereitechnik-doerner.com/about/",
+    "datenschutz_url": "https://www.baeckereitechnik-doerner.com/j/privacy",
+    "agb": "",
+}
 
 # Wird überall dort angezeigt, wo Preise erscheinen (Formular, Ergebnis,
 # PDF, Auftrags-Mail) - alle berechneten Preise sind Nettopreise.
@@ -162,6 +167,13 @@ def _session_preview_path() -> str:
     return os.path.join(RESULTS_DIR, f"{_session_uid()}.png")
 
 
+def _load_legal() -> dict:
+    """Mergt gespeicherte Werte über die Defaults, damit einzelne noch nie
+    gespeicherte Felder (z.B. nach diesem Update neu hinzugekommene URL-
+    Felder) trotzdem ihren Default zeigen, statt leer zu sein."""
+    return {**DEFAULT_LEGAL, **storage.load_json(LEGAL_PATH, default={})}
+
+
 def _cleanup_old_results(max_age_seconds: int = 24 * 3600) -> None:
     try:
         cutoff = time.time() - max_age_seconds
@@ -191,26 +203,24 @@ def index():
 
 
 # --------------------------------------------------------------------------
-# Rechtliches: Impressum/Datenschutz/AGB (Freitext, vom Admin gepflegt) sowie
-# die einmalige Bestätigung, dass diese vor Nutzung des Rechners gelesen und
+# Rechtliches: Impressum/Datenschutz verweisen auf die Haupt-Domain, AGB
+# bleiben als Freitext in der App (vom Admin gepflegt). Zusätzlich die
+# einmalige Bestätigung, dass alle drei vor Nutzung des Rechners gelesen und
 # verstanden wurden (Session-Flag, kein Login nötig).
 # --------------------------------------------------------------------------
 @app.route("/impressum")
 def impressum():
-    legal = storage.load_json(LEGAL_PATH, default=DEFAULT_LEGAL)
-    return render_template("legal_page.html", title="Impressum", text=legal.get("impressum", ""))
+    return redirect(_load_legal()["impressum_url"])
 
 
 @app.route("/datenschutz")
 def datenschutz():
-    legal = storage.load_json(LEGAL_PATH, default=DEFAULT_LEGAL)
-    return render_template("legal_page.html", title="Datenschutzerklärung", text=legal.get("datenschutz", ""))
+    return redirect(_load_legal()["datenschutz_url"])
 
 
 @app.route("/agb")
 def agb():
-    legal = storage.load_json(LEGAL_PATH, default=DEFAULT_LEGAL)
-    return render_template("legal_page.html", title="AGB", text=legal.get("agb", ""))
+    return render_template("legal_page.html", title="AGB", text=_load_legal()["agb"])
 
 
 @app.route("/rechtliches/bestaetigen", methods=["POST"])
@@ -628,7 +638,7 @@ def admin_logout():
 def admin_dashboard():
     materials = storage.load_json(MATERIALS_PATH, default=[])
     settings = storage.load_json(SETTINGS_PATH, default=DEFAULT_SETTINGS)
-    legal = storage.load_json(LEGAL_PATH, default=DEFAULT_LEGAL)
+    legal = _load_legal()
     return render_template(
         "admin.html",
         materials=materials,
@@ -665,12 +675,12 @@ def admin_settings_save():
 @admin_required
 def admin_rechtstexte_save():
     legal = {
-        "impressum": request.form.get("impressum", "").strip(),
-        "datenschutz": request.form.get("datenschutz", "").strip(),
+        "impressum_url": request.form.get("impressum_url", "").strip(),
+        "datenschutz_url": request.form.get("datenschutz_url", "").strip(),
         "agb": request.form.get("agb", "").strip(),
     }
     storage.save_json(legal, LEGAL_PATH)
-    flash("Rechtstexte gespeichert.")
+    flash("Rechtliches gespeichert.")
     return redirect(url_for("admin_dashboard"))
 
 

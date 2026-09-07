@@ -144,14 +144,15 @@ gehashtes Passwort, kein Klartext); danach normaler Login. Dort:
   hochladen/löschen; Kunden können daraus nur auswählen, Preis/Geschwindigkeit/
   Dichte kommen ausschließlich aus dieser Liste und sind für den Kunden nicht
   änderbar.
-- **Rechtliches (Impressum, Datenschutz, AGB)**: drei Freitextfelder, werden
-  1:1 auf den öffentlichen Seiten `/impressum`, `/datenschutz`, `/agb`
-  angezeigt (im Footer jeder Seite verlinkt). Leer bis der Admin sie befüllt -
-  die inhaltliche Richtigkeit/Vollständigkeit liegt beim Betreiber, die App
-  liefert nur den Mechanismus, keine vorformulierten Texte (im Zweifel einen
-  Impressum-/Datenschutz-Generator oder eine Rechtsberatung nutzen, gerade
-  weil hier personenbezogene Daten - Name/E-Mail bei "Auftrag senden",
-  Session-Cookies - verarbeitet werden).
+- **Rechtliches (Impressum, Datenschutz, AGB)**: Impressum und
+  Datenschutzerklärung sind Links auf die Haupt-Domain (`/impressum` und
+  `/datenschutz` leiten dorthin weiter, im Footer jeder Seite verlinkt) -
+  Standardwerte sind bereits auf `baeckereitechnik-doerner.com` gesetzt, im
+  Admin-Bereich änderbar. Nur die AGB bleiben als Freitextfeld direkt in der
+  App, angezeigt unter `/agb`. Die inhaltliche Richtigkeit/Vollständigkeit
+  liegt beim Betreiber (im Zweifel einen Generator oder eine Rechtsberatung
+  nutzen, gerade weil hier personenbezogene Daten - Name/E-Mail bei
+  "Angebot anfordern", Session-Cookies - verarbeitet werden).
 
 ## Rechtliche Bestätigung vor Nutzung
 

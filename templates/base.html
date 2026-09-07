@@ -34,8 +34,8 @@
         {% block content %}{% endblock %}
     </main>
     <footer>
-        <a href="{{ url_for('impressum') }}">Impressum</a>
-        <a href="{{ url_for('datenschutz') }}">Datenschutz</a>
+        <a href="{{ url_for('impressum') }}" target="_blank" rel="noopener">Impressum</a>
+        <a href="{{ url_for('datenschutz') }}" target="_blank" rel="noopener">Datenschutz</a>
         <a href="{{ url_for('agb') }}">AGB</a>
         {% if session.is_admin %}
             <a href="{{ url_for('admin_dashboard') }}">Admin-Bereich</a>

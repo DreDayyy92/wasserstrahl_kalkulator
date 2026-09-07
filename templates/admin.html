@@ -53,18 +53,18 @@
 <section class="card">
     <h2>Rechtliches (Impressum, Datenschutz, AGB)</h2>
     <p class="hint">
-        Freitext, wird 1:1 auf den jeweiligen öffentlichen Seiten angezeigt
-        (verlinkt im Footer jeder Seite). Der Kunde muss diese Texte vor der
-        ersten Nutzung des Rechners bestätigen. Inhaltlich liegt die
-        Verantwortung beim Betreiber - im Zweifel einen Impressum-/
-        Datenschutz-Generator oder eine Rechtsberatung nutzen.
+        Impressum und Datenschutzerklärung werden auf die Haupt-Domain
+        verlinkt (im Footer jeder Seite) statt hier gepflegt zu werden. Die
+        AGB bleiben als Freitext direkt in der App, unter /agb angezeigt.
+        Der Kunde muss vor der ersten Nutzung des Rechners bestätigen, alle
+        drei gelesen und verstanden zu haben.
     </p>
     <form action="{{ url_for('admin_rechtstexte_save') }}" method="post">
-        <label>Impressum:
-            <textarea name="impressum" rows="8">{{ legal.impressum }}</textarea>
+        <label>Impressum-Link:
+            <input type="url" name="impressum_url" value="{{ legal.impressum_url }}">
         </label>
-        <label>Datenschutzerklärung:
-            <textarea name="datenschutz" rows="8">{{ legal.datenschutz }}</textarea>
+        <label>Datenschutz-Link:
+            <input type="url" name="datenschutz_url" value="{{ legal.datenschutz_url }}">
         </label>
         <label>AGB:
             <textarea name="agb" rows="8">{{ legal.agb }}</textarea>

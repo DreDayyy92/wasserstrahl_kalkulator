@@ -169,6 +169,18 @@ def _session_preview_path() -> str:
     return os.path.join(RESULTS_DIR, f"{_session_uid()}.png")
 
 
+def _load_material_groups() -> list[dict]:
+    """Lädt die Materialgruppen und überspringt defensiv Einträge in einem
+    alten Format (z.B. Reste des früheren CSV-Imports vor der Gruppen-
+    Verwaltung - flache Material/Stärke-Dicts ohne "id"/"staerken"). Ohne
+    diesen Filter bleiben solche Reste unbemerkt liegen: die Kundenliste
+    wirkt leer und Admin-Links auf die (fehlende) Gruppen-ID brechen mit
+    404. Wird hier eine Gruppe gespeichert, fallen die alten Einträge dabei
+    automatisch raus."""
+    raw = storage.load_json(MATERIALS_PATH, default=[])
+    return [g for g in raw if isinstance(g, dict) and "id" in g and "staerken" in g]
+
+
 def _flatten_materials(groups: list[dict]) -> list[dict]:
     """Wandelt die im Admin-Bereich gepflegte Gruppen-Struktur (Hauptgruppe
     z.B. "VA" + mehrere Stärken je eigener Schnittgeschwindigkeit/
@@ -212,7 +224,7 @@ def _cleanup_old_results(max_age_seconds: int = 24 * 3600) -> None:
 # --------------------------------------------------------------------------
 @app.route("/")
 def index():
-    materials = _flatten_materials(storage.load_json(MATERIALS_PATH, default=[]))
+    materials = _flatten_materials(_load_material_groups())
     return render_template(
         "index.html",
         materials=materials,
@@ -389,7 +401,7 @@ def berechnen():
     # Preis, Schnittgeschwindigkeit, Einstechzeit und Dichte kommen NIE aus
     # dem Formular, sonst könnte jeder per direktem POST eigene Preise
     # unterschieben.
-    materials = _flatten_materials(storage.load_json(MATERIALS_PATH, default=[]))
+    materials = _flatten_materials(_load_material_groups())
     material = None
     material_index_raw = request.form.get("material_index", "").strip()
     if material_index_raw != "":
@@ -663,7 +675,7 @@ def admin_logout():
 @app.route("/admin")
 @admin_required
 def admin_dashboard():
-    groups = storage.load_json(MATERIALS_PATH, default=[])
+    groups = _load_material_groups()
     settings = storage.load_json(SETTINGS_PATH, default=DEFAULT_SETTINGS)
     legal = _load_legal()
     return render_template(
@@ -725,7 +737,7 @@ def material_gruppe_neu():
         flash("Bitte einen Namen für die Materialgruppe angeben.")
         return redirect(url_for("admin_dashboard"))
 
-    groups = storage.load_json(MATERIALS_PATH, default=[])
+    groups = _load_material_groups()
     groups.append({
         "id": uuid.uuid4().hex,
         "gruppe": name,
@@ -741,7 +753,7 @@ def material_gruppe_neu():
 @app.route("/admin/materialien/gruppe/<gruppe_id>/bearbeiten", methods=["POST"])
 @admin_required
 def material_gruppe_bearbeiten(gruppe_id):
-    groups = storage.load_json(MATERIALS_PATH, default=[])
+    groups = _load_material_groups()
     for g in groups:
         if g.get("id") == gruppe_id:
             name = request.form.get("gruppe", "").strip()
@@ -758,7 +770,7 @@ def material_gruppe_bearbeiten(gruppe_id):
 @app.route("/admin/materialien/gruppe/<gruppe_id>/loeschen", methods=["POST"])
 @admin_required
 def material_gruppe_loeschen(gruppe_id):
-    groups = storage.load_json(MATERIALS_PATH, default=[])
+    groups = _load_material_groups()
     groups = [g for g in groups if g.get("id") != gruppe_id]
     storage.save_json(groups, MATERIALS_PATH)
     flash("Materialgruppe gelöscht.")
@@ -768,7 +780,7 @@ def material_gruppe_loeschen(gruppe_id):
 @app.route("/admin/materialien/gruppe/<gruppe_id>/staerke/neu", methods=["POST"])
 @admin_required
 def material_staerke_neu(gruppe_id):
-    groups = storage.load_json(MATERIALS_PATH, default=[])
+    groups = _load_material_groups()
     for g in groups:
         if g.get("id") == gruppe_id:
             g.setdefault("staerken", []).append({
@@ -789,7 +801,7 @@ def material_staerke_neu(gruppe_id):
 @app.route("/admin/materialien/gruppe/<gruppe_id>/staerke/<int:idx>/bearbeiten", methods=["POST"])
 @admin_required
 def material_staerke_bearbeiten(gruppe_id, idx):
-    groups = storage.load_json(MATERIALS_PATH, default=[])
+    groups = _load_material_groups()
     for g in groups:
         if g.get("id") == gruppe_id:
             staerken = g.get("staerken", [])
@@ -812,7 +824,7 @@ def material_staerke_bearbeiten(gruppe_id, idx):
 @app.route("/admin/materialien/gruppe/<gruppe_id>/staerke/<int:idx>/loeschen", methods=["POST"])
 @admin_required
 def material_staerke_loeschen(gruppe_id, idx):
-    groups = storage.load_json(MATERIALS_PATH, default=[])
+    groups = _load_material_groups()
     for g in groups:
         if g.get("id") == gruppe_id:
             staerken = g.get("staerken", [])

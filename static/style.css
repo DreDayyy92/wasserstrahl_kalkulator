@@ -141,6 +141,23 @@ input, select, textarea {
 }
 textarea { resize: vertical; }
 .inline-form { display: inline-block; margin-right: 0.5rem; }
+details {
+    border: 1px solid var(--card-border);
+    border-radius: 6px;
+    margin-bottom: 0.6rem;
+    padding: 0.6rem 0.9rem;
+}
+details > summary {
+    cursor: pointer;
+    font-weight: 600;
+    list-style-position: outside;
+}
+details > summary small { font-weight: normal; color: var(--hint-color); }
+details[open] > summary { margin-bottom: 0.6rem; }
+details details {
+    margin: 0.5rem 0 0.5rem 1rem;
+}
+details details > summary { font-weight: 500; }
 button {
     background: var(--button-bg);
     color: var(--button-text);

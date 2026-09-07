@@ -786,6 +786,29 @@ def material_staerke_neu(gruppe_id):
     return redirect(url_for("admin_dashboard"))
 
 
+@app.route("/admin/materialien/gruppe/<gruppe_id>/staerke/<int:idx>/bearbeiten", methods=["POST"])
+@admin_required
+def material_staerke_bearbeiten(gruppe_id, idx):
+    groups = storage.load_json(MATERIALS_PATH, default=[])
+    for g in groups:
+        if g.get("id") == gruppe_id:
+            staerken = g.get("staerken", [])
+            if 0 <= idx < len(staerken):
+                staerken[idx] = {
+                    "staerke_mm": _to_float_form("staerke_mm", staerken[idx].get("staerke_mm", 0.0)),
+                    "schnittgeschwindigkeit_mm_min": _to_float_form(
+                        "schnittgeschwindigkeit_mm_min", staerken[idx].get("schnittgeschwindigkeit_mm_min", 0.0)
+                    ),
+                    "einstechzeit_s": _to_float_form(
+                        "einstechzeit_s", staerken[idx].get("einstechzeit_s", DEFAULT_EINSTECHZEIT_S)
+                    ),
+                }
+            break
+    storage.save_json(groups, MATERIALS_PATH)
+    flash("Stärke aktualisiert.")
+    return redirect(url_for("admin_dashboard"))
+
+
 @app.route("/admin/materialien/gruppe/<gruppe_id>/staerke/<int:idx>/loeschen", methods=["POST"])
 @admin_required
 def material_staerke_loeschen(gruppe_id, idx):

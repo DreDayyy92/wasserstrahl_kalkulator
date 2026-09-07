@@ -27,27 +27,29 @@
         der Blechdicke variiert.
     </p>
 
-    <h3>Neue Materialgruppe anlegen</h3>
-    <form action="{{ url_for('material_gruppe_neu') }}" method="post">
-        <label>Name (z.B. VA, Baustahl, Alu):
-            <input type="text" name="gruppe" required>
-        </label>
-        <label>Preis pro kg (€):
-            <input type="number" step="0.01" min="0" name="preis_pro_kg" required>
-        </label>
-        <label>Dichte (g/cm³):
-            <input type="number" step="0.01" min="0" name="dichte_g_cm3" value="7.85">
-        </label>
-        <button type="submit">Gruppe anlegen</button>
-    </form>
+    <details>
+        <summary>+ Neue Materialgruppe anlegen</summary>
+        <form action="{{ url_for('material_gruppe_neu') }}" method="post">
+            <label>Name (z.B. VA, Baustahl, Alu):
+                <input type="text" name="gruppe" required>
+            </label>
+            <label>Preis pro kg (€):
+                <input type="number" step="0.01" min="0" name="preis_pro_kg" required>
+            </label>
+            <label>Dichte (g/cm³):
+                <input type="number" step="0.01" min="0" name="dichte_g_cm3" value="7.85">
+            </label>
+            <button type="submit">Gruppe anlegen</button>
+        </form>
+    </details>
 
     {% if not groups %}
         <p class="hint">Noch keine Materialgruppe angelegt.</p>
     {% endif %}
 
     {% for g in groups %}
-        <fieldset>
-            <legend>{{ g.gruppe }}</legend>
+        <details>
+            <summary>{{ g.gruppe }} <small>· {{ g.staerken|length }} Stärke(n) · {{ '%.2f'|format(g.preis_pro_kg) }} €/kg</small></summary>
 
             <form action="{{ url_for('material_gruppe_bearbeiten', gruppe_id=g.id) }}" method="post">
                 <label>Name:
@@ -65,46 +67,47 @@
                 <button type="submit" class="secondary">Gruppe löschen</button>
             </form>
 
-            {% if g.staerken %}
-                <div class="table-scroll">
-                    <table>
-                        <tr>
-                            <th>Stärke (mm)</th>
-                            <th>Schnittgeschw. (mm/min)</th>
-                            <th>Einstechzeit (s)</th>
-                            <th></th>
-                        </tr>
-                        {% for st in g.staerken %}
-                            <tr>
-                                <td>{{ st.staerke_mm }}</td>
-                                <td>{{ st.schnittgeschwindigkeit_mm_min }}</td>
-                                <td>{{ st.einstechzeit_s }}</td>
-                                <td>
-                                    <form action="{{ url_for('material_staerke_loeschen', gruppe_id=g.id, idx=loop.index0) }}" method="post" class="inline-form">
-                                        <button type="submit" class="link-button">Löschen</button>
-                                    </form>
-                                </td>
-                            </tr>
-                        {% endfor %}
-                    </table>
-                </div>
-            {% else %}
+            {% if not g.staerken %}
                 <p class="hint">Noch keine Stärke hinterlegt.</p>
             {% endif %}
 
-            <form action="{{ url_for('material_staerke_neu', gruppe_id=g.id) }}" method="post">
-                <label>Stärke (mm):
-                    <input type="number" step="0.1" min="0" name="staerke_mm" required>
-                </label>
-                <label>Schnittgeschwindigkeit (mm/min):
-                    <input type="number" step="1" min="0" name="schnittgeschwindigkeit_mm_min" required>
-                </label>
-                <label>Einstechzeit (s):
-                    <input type="number" step="1" min="0" name="einstechzeit_s" value="15" required>
-                </label>
-                <button type="submit">Stärke hinzufügen</button>
-            </form>
-        </fieldset>
+            {% for st in g.staerken %}
+                <details>
+                    <summary>{{ st.staerke_mm }} mm <small>· {{ st.schnittgeschwindigkeit_mm_min }} mm/min · {{ st.einstechzeit_s }} s Einstechzeit</small></summary>
+                    <form action="{{ url_for('material_staerke_bearbeiten', gruppe_id=g.id, idx=loop.index0) }}" method="post">
+                        <label>Stärke (mm):
+                            <input type="number" step="0.1" min="0" name="staerke_mm" value="{{ st.staerke_mm }}">
+                        </label>
+                        <label>Schnittgeschwindigkeit (mm/min):
+                            <input type="number" step="1" min="0" name="schnittgeschwindigkeit_mm_min" value="{{ st.schnittgeschwindigkeit_mm_min }}">
+                        </label>
+                        <label>Einstechzeit (s):
+                            <input type="number" step="1" min="0" name="einstechzeit_s" value="{{ st.einstechzeit_s }}">
+                        </label>
+                        <button type="submit">Speichern</button>
+                    </form>
+                    <form action="{{ url_for('material_staerke_loeschen', gruppe_id=g.id, idx=loop.index0) }}" method="post" class="inline-form">
+                        <button type="submit" class="link-button">Stärke löschen</button>
+                    </form>
+                </details>
+            {% endfor %}
+
+            <details>
+                <summary>+ Stärke hinzufügen</summary>
+                <form action="{{ url_for('material_staerke_neu', gruppe_id=g.id) }}" method="post">
+                    <label>Stärke (mm):
+                        <input type="number" step="0.1" min="0" name="staerke_mm" required>
+                    </label>
+                    <label>Schnittgeschwindigkeit (mm/min):
+                        <input type="number" step="1" min="0" name="schnittgeschwindigkeit_mm_min" required>
+                    </label>
+                    <label>Einstechzeit (s):
+                        <input type="number" step="1" min="0" name="einstechzeit_s" value="15" required>
+                    </label>
+                    <button type="submit">Stärke hinzufügen</button>
+                </form>
+            </details>
+        </details>
     {% endfor %}
 
     {% if groups %}

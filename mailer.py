@@ -65,9 +65,9 @@ def send_offer_request_email(
         "Unverbindliche Angebotsanfrage über den Wasserstrahl-Kalkulator.",
         "",
         f"Teil: {dateiname}",
-        f"Stueckzahl: {result.get('stueckzahl')}",
+        f"Stückzahl: {result.get('stueckzahl')}",
         f"Material: {result.get('material_name')} ({result.get('dicke_mm')} mm)",
-        f"Schnittqualitaet: {result.get('schnittqualitaet_label')}",
+        f"Schnittqualität: {result.get('schnittqualitaet_label')}",
         f"Schnittgeschwindigkeit: {result.get('schnittgeschwindigkeit_effektiv')} mm/min",
         f"Gesamtkosten: {result.get('gesamtkosten'):.2f} EUR (netto, zzgl. gesetzlicher MwSt.)",
     ]
@@ -132,9 +132,9 @@ def send_customer_confirmation_email(
         "Sie erhalten in Kürze ein verbindliches Angebot von uns. ",
         "",
         f"Teil: {dateiname}",
-        f"Stueckzahl: {result.get('stueckzahl')}",
+        f"Stückzahl: {result.get('stueckzahl')}",
         f"Material: {result.get('material_name')} ({result.get('dicke_mm')} mm)",
-        f"Geschaetzte Gesamtkosten: {result.get('gesamtkosten'):.2f} EUR "
+        f"Geschätzte Gesamtkosten: {result.get('gesamtkosten'):.2f} EUR "
         "(netto, unverbindlich - kein verbindliches Angebot)",
         "",
         "Im Anhang finden Sie eine Kopie der Kalkulation als PDF.",

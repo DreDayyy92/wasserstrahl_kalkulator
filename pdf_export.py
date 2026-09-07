@@ -31,14 +31,14 @@ def build_pdf(result: dict, dateiname: str, preview_png_path: str | None = None)
     pdf.cell(0, 10, "Wasserstrahl-Kalkulation (unverbindlich)", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("helvetica", "", 11)
     pdf.cell(0, 7, f"Teil: {dateiname}", new_x="LMARGIN", new_y="NEXT")
-    pdf.cell(0, 7, f"Stueckzahl: {result['stueckzahl']}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 7, f"Stückzahl: {result['stueckzahl']}", new_x="LMARGIN", new_y="NEXT")
 
     geo = result.get("geo") or {}
     _section(pdf, "Geometrie")
     if geo.get("width_mm") is not None:
-        _row(pdf, "Breite x Hoehe", f"{geo['width_mm']} x {geo['height_mm']} mm")
-    _row(pdf, "Flaeche", f"{geo.get('area_m2', 0):.4f} m2")
-    _row(pdf, "Gesamt-Schnittlaenge", f"{geo.get('total_cut_length_mm', 0)} mm")
+        _row(pdf, "Breite x Höhe", f"{geo['width_mm']} x {geo['height_mm']} mm")
+    _row(pdf, "Fläche", f"{geo.get('area_m2', 0):.4f} m2")
+    _row(pdf, "Gesamt-Schnittlänge", f"{geo.get('total_cut_length_mm', 0)} mm")
 
     if preview_png_path:
         pdf.ln(3)
@@ -56,7 +56,7 @@ def build_pdf(result: dict, dateiname: str, preview_png_path: str | None = None)
 
     _section(pdf, "Maschine")
     if result.get("schnittqualitaet_label"):
-        _row(pdf, "Schnittqualitaet", result["schnittqualitaet_label"])
+        _row(pdf, "Schnittqualität", result["schnittqualitaet_label"])
     if result.get("schnittgeschwindigkeit_effektiv") is not None:
         _row(pdf, "Schnittgeschwindigkeit", f"{result['schnittgeschwindigkeit_effektiv']} mm/min")
     _row(pdf, "Einstiche", str(result.get("einstiche", "-")))
@@ -65,13 +65,13 @@ def build_pdf(result: dict, dateiname: str, preview_png_path: str | None = None)
     _row(pdf, "Maschinenzeit pro Teil", f"{result['maschinenzeit_min']} min")
     _row(pdf, "Maschinenkosten pro Teil", f"{result['maschinenkosten']:.2f} EUR")
     _row(pdf, f"Maschinenkosten x {result['stueckzahl']}", f"{result['maschinenkosten_gesamt']:.2f} EUR", bold=True)
-    _row(pdf, "Ruestkosten (einmalig)", f"{result['ruestkosten']:.2f} EUR", bold=True)
+    _row(pdf, "Rüstkosten (einmalig)", f"{result['ruestkosten']:.2f} EUR", bold=True)
 
     pdf.ln(6)
     pdf.set_font("helvetica", "B", 14)
     pdf.cell(
         0, 10,
-        f"Gesamtkosten fuer {result['stueckzahl']} Stueck: {result['gesamtkosten']:.2f} EUR",
+        f"Gesamtkosten fuer {result['stueckzahl']} Stück: {result['gesamtkosten']:.2f} EUR",
         new_x="LMARGIN", new_y="NEXT",
     )
     pdf.set_font("helvetica", "", 9)

@@ -71,6 +71,7 @@ DEFAULT_SETTINGS = {
     "maschinenstundensatz_eur": 45.0,
     "ruestzeit_min": 10.0,
     "max_upload_mb": 20,
+    "empfaenger_emails": [],
 }
 
 # Fallback fuer Materialien aus einer aelteren Version ohne eigene
@@ -124,6 +125,29 @@ def handle_upload_too_large(e):
         return jsonify({"error": message}), 413
     flash(message)
     return redirect(url_for("index"))
+
+
+def _parse_emails(text: str) -> list[str]:
+    """Zerlegt ein Formularfeld (eine Adresse pro Zeile oder durch Komma
+    getrennt) in eine bereinigte Liste - grobe Plausibilitaetspruefung
+    (enthaelt "@" und "."), keine vollstaendige RFC-Validierung noetig, da
+    das nur die eigene Zieladresse des Betreibers betrifft."""
+    raw = text.replace(",", "\n").splitlines()
+    seen = set()
+    result = []
+    for line in raw:
+        email = line.strip()
+        if not email or "@" not in email or "." not in email.split("@")[-1]:
+            continue
+        if email.lower() not in seen:
+            seen.add(email.lower())
+            result.append(email)
+    return result
+
+
+def _load_empfaenger_emails() -> list[str]:
+    settings = storage.load_json(SETTINGS_PATH, default=DEFAULT_SETTINGS)
+    return settings.get("empfaenger_emails") or []
 
 
 def admin_required(view):
@@ -503,7 +527,7 @@ def berechnen():
         "result.html",
         r=result,
         dateiname=dateiname,
-        mail_configured=mailer.is_configured(),
+        mail_configured=mailer.is_configured(_load_empfaenger_emails()),
         captcha_a=captcha_a,
         captcha_b=captcha_b,
         netto_hinweis=NETTO_HINWEIS,
@@ -543,8 +567,9 @@ def auftrag_senden():
         return redirect(url_for("index"))
 
     result, dateiname = data["result"], data["dateiname"]
+    empfaenger = _load_empfaenger_emails()
 
-    if not mailer.is_configured():
+    if not mailer.is_configured(empfaenger):
         flash("E-Mail-Versand ist noch nicht eingerichtet. Bitte den Betreiber kontaktieren.")
         return render_template(
             "result.html", r=result, dateiname=dateiname, mail_configured=False, netto_hinweis=NETTO_HINWEIS
@@ -584,7 +609,7 @@ def auftrag_senden():
 
     try:
         mailer.send_offer_request_email(
-            result, dateiname, dxf_path, preview_path, kunde_name, kunde_email, kunde_notiz
+            result, dateiname, dxf_path, preview_path, kunde_name, kunde_email, kunde_notiz, empfaenger
         )
     except Exception as e:
         flash(f"E-Mail konnte nicht gesendet werden: {e}")
@@ -605,7 +630,9 @@ def auftrag_senden():
     bestaetigung_gesendet = False
     if kunde_email:
         try:
-            mailer.send_customer_confirmation_email(result, dateiname, preview_path, kunde_name, kunde_email)
+            mailer.send_customer_confirmation_email(
+                result, dateiname, preview_path, kunde_name, kunde_email, empfaenger
+            )
             bestaetigung_gesendet = True
         except Exception:
             pass
@@ -707,6 +734,7 @@ def admin_settings_save():
         ),
         "ruestzeit_min": to_float("ruestzeit_min", DEFAULT_SETTINGS["ruestzeit_min"]),
         "max_upload_mb": max(1, to_float("max_upload_mb", DEFAULT_SETTINGS["max_upload_mb"])),
+        "empfaenger_emails": _parse_emails(request.form.get("empfaenger_emails", "")),
     }
     storage.save_json(settings, SETTINGS_PATH)
     flash("Einstellungen gespeichert.")

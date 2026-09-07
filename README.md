@@ -192,10 +192,17 @@ Die Zugangsdaten/SMTP-Host/Serveradressen (z.B. `smtp.ionos.de`,
 im Repo liegt nur `.env.example` als Vorlage ohne echte Werte. Bei Docker
 Compose wird `.env` automatisch als `env_file` in den Container geladen (in
 `docker-compose.yml` hinterlegt), ohne Neu-Build bei geänderten Werten -
-`docker compose up -d` reicht. Ist keine `.env` vorhanden bzw. sind
-`SMTP_HOST`/`MAIL_TO` nicht gesetzt, zeigt die Ergebnisseite statt des
-Sende-Formulars nur einen Hinweis, dass der Versand noch nicht eingerichtet
-ist - die restliche App funktioniert unabhängig davon normal weiter.
+`docker compose up -d` reicht. Ist keine `.env` vorhanden bzw. ist
+`SMTP_HOST` nicht gesetzt, zeigt die Ergebnisseite statt des Sende-Formulars
+nur einen Hinweis, dass der Versand noch nicht eingerichtet ist - die
+restliche App funktioniert unabhängig davon normal weiter.
+
+**Empfänger der Anfragen** sind seit Kurzem nicht mehr an `MAIL_TO` aus der
+`.env` gebunden, sondern im Admin-Bereich unter "Feste Kostenparameter" als
+Liste (eine E-Mail-Adresse pro Zeile) pflegbar - so lassen sich Anfragen an
+mehrere/wechselnde Adressen schicken, ohne den Server neu zu konfigurieren.
+`MAIL_TO` aus der `.env` bleibt als Fallback bestehen, falls im Admin-Bereich
+noch keine Empfänger eingetragen sind.
 
 ## Wichtige Vereinfachungen (bewusst, für den Start)
 

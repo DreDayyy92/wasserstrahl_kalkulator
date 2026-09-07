@@ -14,8 +14,16 @@ from email.message import EmailMessage
 import pdf_export
 
 
-def is_configured() -> bool:
-    return bool(os.environ.get("SMTP_HOST") and os.environ.get("MAIL_TO"))
+def is_configured(empfaenger_emails: list[str] | None = None) -> bool:
+    has_target = bool(empfaenger_emails) or bool(os.environ.get("MAIL_TO"))
+    return bool(os.environ.get("SMTP_HOST") and has_target)
+
+
+def _resolve_recipients(empfaenger_emails: list[str] | None) -> list[str]:
+    if empfaenger_emails:
+        return empfaenger_emails
+    mail_to = os.environ.get("MAIL_TO")
+    return [mail_to] if mail_to else []
 
 
 def _send(msg: EmailMessage) -> None:
@@ -38,15 +46,18 @@ def send_offer_request_email(
     kunde_name: str,
     kunde_email: str,
     kunde_notiz: str,
+    empfaenger_emails: list[str] | None = None,
 ) -> None:
     username = os.environ.get("SMTP_USERNAME", "")
     mail_from = os.environ.get("MAIL_FROM") or username
-    mail_to = os.environ["MAIL_TO"]
+    mail_to = _resolve_recipients(empfaenger_emails)
+    if not mail_to:
+        raise RuntimeError("Keine Zieladresse fuer die Angebotsanfrage konfiguriert.")
 
     msg = EmailMessage()
     msg["Subject"] = f"Unverbindliche Angebotsanfrage: {dateiname}"
     msg["From"] = mail_from
-    msg["To"] = mail_to
+    msg["To"] = ", ".join(mail_to)
     if kunde_email:
         msg["Reply-To"] = kunde_email
 
@@ -94,6 +105,7 @@ def send_customer_confirmation_email(
     preview_png_path: str | None,
     kunde_name: str,
     kunde_email: str,
+    empfaenger_emails: list[str] | None = None,
 ) -> None:
     """Bestaetigung an den Kunden selbst (nur wenn er eine E-Mail-Adresse
     angegeben hat) - eigene Kopie der Kalkulation, kein verbindliches
@@ -102,7 +114,8 @@ def send_customer_confirmation_email(
     erfolgreich verschickte Anfrage nicht ungeschehen machen."""
     username = os.environ.get("SMTP_USERNAME", "")
     mail_from = os.environ.get("MAIL_FROM") or username
-    mail_to_shop = os.environ.get("MAIL_TO") or mail_from
+    shop_recipients = _resolve_recipients(empfaenger_emails)
+    mail_to_shop = shop_recipients[0] if shop_recipients else mail_from
 
     msg = EmailMessage()
     msg["Subject"] = f"Ihre Anfrage: {dateiname}"

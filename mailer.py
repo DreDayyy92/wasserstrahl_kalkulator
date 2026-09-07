@@ -127,9 +127,9 @@ def send_customer_confirmation_email(
     lines = [
         anrede,
         "",
-        "vielen Dank für Ihre Anfrage über unseren Kalkulator."
+        "vielen Dank für Ihre Anfrage über unseren Kalkulator. "
         "Wir haben ihre Daten erhalten und prüfen diese umgehend. "
-        "Sie erhalten in Kürze ein verbindliches Angebotvon uns. ",
+        "Sie erhalten in Kürze ein verbindliches Angebot von uns. ",
         "",
         f"Teil: {dateiname}",
         f"Stueckzahl: {result.get('stueckzahl')}",

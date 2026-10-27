@@ -38,11 +38,19 @@ def _send(msg: EmailMessage) -> None:
         smtp.send_message(msg)
 
 
+def _teile_lines(result: dict) -> list[str]:
+    teile = result["teile"]
+    if len(teile) == 1:
+        return [f"Teil: {teile[0]['dateiname']}", f"Stückzahl: {teile[0]['stueckzahl']}"]
+    return ["Teile:"] + [
+        f"  {i}. {t['dateiname']} - Stückzahl {t['stueckzahl']}" for i, t in enumerate(teile, start=1)
+    ]
+
+
 def send_offer_request_email(
     result: dict,
     dateiname: str,
-    dxf_path: str | None,
-    preview_png_path: str | None,
+    teil_files: list[dict],
     kunde_name: str,
     kunde_email: str,
     kunde_notiz: str,
@@ -64,8 +72,7 @@ def send_offer_request_email(
     lines = [
         "Unverbindliche Angebotsanfrage über den Wasserstrahl-Kalkulator.",
         "",
-        f"Teil: {dateiname}",
-        f"Stückzahl: {result.get('stueckzahl')}",
+        *_teile_lines(result),
         f"Material: {result.get('material_name')} ({result.get('dicke_mm')} mm)",
         f"Schnittqualität: {result.get('schnittqualitaet_label')}",
         f"Schnittgeschwindigkeit: {result.get('schnittgeschwindigkeit_effektiv')} mm/min",
@@ -82,19 +89,21 @@ def send_offer_request_email(
 
     msg.set_content("\n".join(lines))
 
-    pdf_bytes = pdf_export.build_pdf(result, dateiname, preview_png_path)
+    pdf_bytes = pdf_export.build_pdf(result, dateiname, [f["png_path"] for f in teil_files])
     msg.add_attachment(pdf_bytes, maintype="application", subtype="pdf", filename="kalkulation.pdf")
 
-    if dxf_path and os.path.exists(dxf_path):
-        with open(dxf_path, "rb") as f:
-            dxf_bytes = f.read()
-        anhang_name = dateiname if dateiname.lower().endswith(".dxf") else f"{dateiname}.dxf"
-        msg.add_attachment(dxf_bytes, maintype="application", subtype="dxf", filename=anhang_name)
+    for n, f in enumerate(teil_files, start=1):
+        if f["dxf_path"] and os.path.exists(f["dxf_path"]):
+            with open(f["dxf_path"], "rb") as fh:
+                dxf_bytes = fh.read()
+            name = f["dateiname"]
+            anhang_name = name if name.lower().endswith(".dxf") else f"{name}.dxf"
+            msg.add_attachment(dxf_bytes, maintype="application", subtype="dxf", filename=anhang_name)
 
-    if preview_png_path and os.path.exists(preview_png_path):
-        with open(preview_png_path, "rb") as f:
-            png_bytes = f.read()
-        msg.add_attachment(png_bytes, maintype="image", subtype="png", filename="vorschau.png")
+        if f["png_path"] and os.path.exists(f["png_path"]):
+            with open(f["png_path"], "rb") as fh:
+                png_bytes = fh.read()
+            msg.add_attachment(png_bytes, maintype="image", subtype="png", filename=f"vorschau_{n}.png")
 
     _send(msg)
 
@@ -102,7 +111,7 @@ def send_offer_request_email(
 def send_customer_confirmation_email(
     result: dict,
     dateiname: str,
-    preview_png_path: str | None,
+    teil_files: list[dict],
     kunde_name: str,
     kunde_email: str,
     empfaenger_emails: list[str] | None = None,
@@ -131,8 +140,7 @@ def send_customer_confirmation_email(
         "Wir haben ihre Daten erhalten und prüfen diese umgehend. "
         "Sie erhalten in Kürze ein verbindliches Angebot von uns. ",
         "",
-        f"Teil: {dateiname}",
-        f"Stückzahl: {result.get('stueckzahl')}",
+        *_teile_lines(result),
         f"Material: {result.get('material_name')} ({result.get('dicke_mm')} mm)",
         f"Geschätzte Gesamtkosten: {result.get('gesamtkosten'):.2f} EUR "
         "(netto, unverbindlich - kein verbindliches Angebot)",
@@ -143,7 +151,7 @@ def send_customer_confirmation_email(
     ]
     msg.set_content("\n".join(lines))
 
-    pdf_bytes = pdf_export.build_pdf(result, dateiname, preview_png_path)
+    pdf_bytes = pdf_export.build_pdf(result, dateiname, [f["png_path"] for f in teil_files])
     msg.add_attachment(pdf_bytes, maintype="application", subtype="pdf", filename="kalkulation.pdf")
 
     _send(msg)

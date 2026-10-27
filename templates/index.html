@@ -23,7 +23,7 @@
         <p class="hint">Es ist noch keine Materialliste hinterlegt. Bitte den Betreiber kontaktieren, bevor eine Berechnung möglich ist.</p>
     {% else %}
     <p class="hint">{{ netto_hinweis }}</p>
-    <form action="{{ url_for('berechnen') }}" method="post" enctype="multipart/form-data">
+    <form action="{{ url_for('berechnen') }}" method="post" enctype="multipart/form-data" onsubmit="return validateForm()">
 
         <fieldset>
             <legend>Berechnungsart</legend>
@@ -35,30 +35,25 @@
                 <input type="radio" name="berechnungsart" value="manuell" onchange="toggleBerechnungsart()">
                 Nur Schnittlänge manuell eingeben
             </label>
-            <label>Stückzahl:
-                <input type="number" step="1" min="1" name="stueckzahl" value="1">
-            </label>
         </fieldset>
 
         <fieldset id="modus_dxf_wrap">
-            <legend>DXF-Datei</legend>
+            <legend>DXF-Dateien</legend>
             <label class="checkbox-inline">
                 <input type="checkbox" id="rechte_bestaetigt_cb" name="rechte_bestaetigt" onchange="toggleDxfUpload()">
-                Ich bestätige, dass ich zur Nutzung dieser Datei berechtigt bin und dadurch keine Rechte Dritter (z.B. Urheber- oder Schutzrechte) verletzt werden.
+                Ich bestätige, dass ich zur Nutzung dieser Dateien berechtigt bin und dadurch keine Rechte Dritter (z.B. Urheber- oder Schutzrechte) verletzt werden.
             </label>
-            <label>Bauteil-DXF:
-                <input type="file" name="dxf_file" id="dxf_file" accept=".dxf" onchange="loadDxfPreview()" disabled>
+            <label>Bauteil-DXF hinzufügen (mehrere Dateien möglich):
+                <input type="file" id="dxf_picker" accept=".dxf" multiple onchange="onPickFiles(this)" disabled>
             </label>
-            <div id="dxf_preview_wrap" class="dxf-preview-wrap" hidden>
-                <div id="dxf_preview_svg" class="dxf-preview"></div>
-                <p id="dxf_preview_error" class="dxf-preview-error"></p>
-                <p id="dxf_preview_einstiche" class="hint"></p>
-                <div id="dxf_layers" class="dxf-layers"></div>
-            </div>
+            <div id="teile_list"></div>
         </fieldset>
 
         <fieldset id="modus_manuell_wrap" hidden>
             <legend>Manuelle Schnittlänge</legend>
+            <label>Stückzahl:
+                <input type="number" step="1" min="1" name="stueckzahl" value="1">
+            </label>
             <label>Schnittlänge (mm):
                 <input type="number" step="0.1" min="0" name="manuelle_schnittlaenge_mm">
             </label>
@@ -167,29 +162,84 @@ function filterMaterials() {
     }
 }
 
-async function loadDxfPreview() {
-    const input = document.getElementById('dxf_file');
-    const wrap = document.getElementById('dxf_preview_wrap');
-    const svgBox = document.getElementById('dxf_preview_svg');
-    const errBox = document.getElementById('dxf_preview_error');
-    const einsticheBox = document.getElementById('dxf_preview_einstiche');
-    const layersBox = document.getElementById('dxf_layers');
+let teilCounter = 0;
 
-    svgBox.innerHTML = '';
-    layersBox.innerHTML = '';
-    errBox.textContent = '';
-    einsticheBox.textContent = '';
+function onPickFiles(picker) {
+    Array.from(picker.files).forEach(addTeil);
+    picker.value = '';
+}
 
-    if (!input.files.length) {
-        wrap.hidden = true;
-        return;
-    }
+function addTeil(file) {
+    const i = teilCounter++;
+    const list = document.getElementById('teile_list');
 
-    wrap.hidden = false;
+    const block = document.createElement('div');
+    block.className = 'teil-block';
+
+    const idx = document.createElement('input');
+    idx.type = 'hidden';
+    idx.name = 'teil_idx';
+    idx.value = i;
+    block.appendChild(idx);
+
+    // Datei per DataTransfer in ein eigenes (verstecktes) File-Input legen,
+    // damit sie mit dem Formular mitgesendet wird.
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.name = 'dxf_file_' + i;
+    fileInput.hidden = true;
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    fileInput.files = dt.files;
+    block.appendChild(fileInput);
+
+    const head = document.createElement('div');
+    head.className = 'teil-head';
+    const title = document.createElement('strong');
+    title.textContent = file.name;
+    head.appendChild(title);
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'secondary';
+    removeBtn.textContent = 'Entfernen';
+    removeBtn.addEventListener('click', function () { block.remove(); });
+    head.appendChild(removeBtn);
+    block.appendChild(head);
+
+    const qtyLabel = document.createElement('label');
+    qtyLabel.textContent = 'Stückzahl: ';
+    const qty = document.createElement('input');
+    qty.type = 'number';
+    qty.step = '1';
+    qty.min = '1';
+    qty.name = 'stueckzahl_' + i;
+    qty.value = '1';
+    qtyLabel.appendChild(qty);
+    block.appendChild(qtyLabel);
+
+    const wrap = document.createElement('div');
+    wrap.className = 'dxf-preview-wrap';
+    const svgBox = document.createElement('div');
+    svgBox.className = 'dxf-preview';
+    const errBox = document.createElement('p');
+    errBox.className = 'dxf-preview-error';
+    const einsticheBox = document.createElement('p');
+    einsticheBox.className = 'hint';
+    const layersBox = document.createElement('div');
+    layersBox.className = 'dxf-layers';
+    wrap.append(svgBox, errBox, einsticheBox, layersBox);
+    block.appendChild(wrap);
+
+    list.appendChild(block);
+    loadDxfPreview(file, i, svgBox, errBox, einsticheBox, layersBox);
+}
+
+async function loadDxfPreview(file, i, svgBox, errBox, einsticheBox, layersBox) {
     errBox.textContent = 'Lade Vorschau...';
 
     const formData = new FormData();
-    formData.append('dxf_file', input.files[0]);
+    formData.append('dxf_file', file);
 
     try {
         const resp = await fetch('{{ url_for("dxf_preview") }}', { method: 'POST', body: formData });
@@ -206,10 +256,10 @@ async function loadDxfPreview() {
         }
 
         // Marker, damit der Server weiß: Layer-Checkboxen wurden gerendert
-        // und included_layers soll ausgewertet werden (auch wenn leer).
+        // und included_layers_<i> soll ausgewertet werden (auch wenn leer).
         const marker = document.createElement('input');
         marker.type = 'hidden';
-        marker.name = 'layers_filter_active';
+        marker.name = 'layers_filter_active_' + i;
         marker.value = '1';
         layersBox.appendChild(marker);
 
@@ -225,11 +275,11 @@ async function loadDxfPreview() {
 
                 const cb = document.createElement('input');
                 cb.type = 'checkbox';
-                cb.name = 'included_layers';
+                cb.name = 'included_layers_' + i;
                 cb.value = layer.name;
                 cb.checked = true;
                 cb.addEventListener('change', function () {
-                    toggleLayerVisibility(layer.name, cb.checked);
+                    toggleLayerVisibility(svgBox, layer.name, cb.checked);
                 });
 
                 label.appendChild(cb);
@@ -242,8 +292,7 @@ async function loadDxfPreview() {
     }
 }
 
-function toggleLayerVisibility(layerName, visible) {
-    const svgBox = document.getElementById('dxf_preview_svg');
+function toggleLayerVisibility(svgBox, layerName, visible) {
     svgBox.querySelectorAll('polyline[data-layer]').forEach(function (el) {
         if (el.getAttribute('data-layer') === layerName) {
             el.style.display = visible ? '' : 'none';
@@ -253,13 +302,30 @@ function toggleLayerVisibility(layerName, visible) {
 
 function toggleDxfUpload() {
     const cb = document.getElementById('rechte_bestaetigt_cb');
-    document.getElementById('dxf_file').disabled = !cb.checked;
+    document.getElementById('dxf_picker').disabled = !cb.checked;
 }
 
 function toggleBerechnungsart() {
     const mode = document.querySelector('input[name="berechnungsart"]:checked').value;
-    document.getElementById('modus_dxf_wrap').hidden = mode !== 'dxf';
-    document.getElementById('modus_manuell_wrap').hidden = mode !== 'manuell';
+    const dxfWrap = document.getElementById('modus_dxf_wrap');
+    const manuellWrap = document.getElementById('modus_manuell_wrap');
+    dxfWrap.hidden = mode !== 'dxf';
+    manuellWrap.hidden = mode !== 'manuell';
+    // Deaktivierte Felder werden nicht mitgesendet (z.B. keine DXF-Uploads im
+    // manuellen Modus).
+    dxfWrap.disabled = mode !== 'dxf';
+    manuellWrap.disabled = mode !== 'manuell';
 }
+
+function validateForm() {
+    const mode = document.querySelector('input[name="berechnungsart"]:checked').value;
+    if (mode === 'dxf' && !document.querySelector('#teile_list .teil-block')) {
+        alert('Bitte mindestens eine DXF-Datei hinzufügen.');
+        return false;
+    }
+    return true;
+}
+
+toggleBerechnungsart();
 </script>
 {% endblock %}

@@ -3,54 +3,61 @@
 <section class="card">
     <h2>Ergebnis: {{ dateiname }}</h2>
 
-    {% if r.svg_preview %}
-        <h3>DXF-Vorschau</h3>
-        <div class="dxf-preview">{{ r.svg_preview|safe }}</div>
-    {% endif %}
-
-    <h3>Geometrie</h3>
-    <table class="result-table">
-        {% if r.geo.width_mm is not none %}
-            <tr><td>Breite × Höhe</td><td>{{ r.geo.width_mm }} × {{ r.geo.height_mm }} mm</td></tr>
-        {% endif %}
-        <tr><td>Fläche</td><td>{{ '%.4f'|format(r.geo.area_m2) }} m²</td></tr>
-        <tr><td>Gesamt-Schnittlänge</td><td>{{ r.geo.total_cut_length_mm }} mm</td></tr>
-        {% if r.geo.entity_count is not none %}
-            <tr><td>Erfasste Entitäten</td><td>{{ r.geo.entity_count }} (übersprungen: {{ r.geo.skipped_entity_count }})</td></tr>
-        {% endif %}
-    </table>
-
     <h3>Material{% if not r.material_berechnet %} <small>(Beistellmaterial des Kunden)</small>{% endif %}</h3>
     <table class="result-table">
         <tr><td>Material</td><td>{{ r.material_name }} ({{ r.dicke_mm }} mm)</td></tr>
         {% if r.material_berechnet %}
-            <tr><td>Gewicht</td><td>{{ r.gewicht_kg }} kg</td></tr>
             <tr><td>Preis/kg</td><td>{{ '%.2f'|format(r.material_preis_pro_kg) }} €</td></tr>
-            <tr><td>Materialkosten pro Teil</td><td>{{ '%.2f'|format(r.materialkosten) }} €</td></tr>
-            <tr class="highlight"><td>Materialkosten × {{ r.stueckzahl }}</td><td>{{ '%.2f'|format(r.materialkosten_gesamt) }} €</td></tr>
         {% endif %}
+        <tr><td>Schnittqualität</td><td>{{ r.schnittqualitaet_label }}</td></tr>
+        <tr><td>Schnittgeschwindigkeit</td><td>{{ r.schnittgeschwindigkeit_effektiv }} mm/min</td></tr>
     </table>
     {% if not r.material_berechnet %}
         <p class="hint">Kein Material berechnet – Kunde bringt eigenes Blech mit.</p>
     {% endif %}
 
-    <h3>Maschine</h3>
+    {% for t in r.teile %}
+        <h3>{% if r.teile|length > 1 %}Teil {{ loop.index }}: {% endif %}{{ t.dateiname }} <small>({{ t.stueckzahl }} Stück)</small></h3>
+        {% if t.svg_preview %}
+            <div class="dxf-preview">{{ t.svg_preview|safe }}</div>
+        {% endif %}
+        <table class="result-table">
+            {% if t.geo.width_mm is not none %}
+                <tr><td>Breite × Höhe</td><td>{{ t.geo.width_mm }} × {{ t.geo.height_mm }} mm</td></tr>
+            {% endif %}
+            <tr><td>Fläche</td><td>{{ '%.4f'|format(t.geo.area_m2) }} m²</td></tr>
+            <tr><td>Gesamt-Schnittlänge</td><td>{{ t.geo.total_cut_length_mm }} mm</td></tr>
+            {% if t.geo.entity_count is not none %}
+                <tr><td>Erfasste Entitäten</td><td>{{ t.geo.entity_count }} (übersprungen: {{ t.geo.skipped_entity_count }})</td></tr>
+            {% endif %}
+            <tr><td>Einstiche</td><td>{{ t.einstiche }}</td></tr>
+            {% if r.material_berechnet %}
+                <tr><td>Gewicht pro Teil</td><td>{{ t.gewicht_kg }} kg</td></tr>
+                <tr><td>Materialkosten pro Teil</td><td>{{ '%.2f'|format(t.materialkosten) }} €</td></tr>
+                <tr class="highlight"><td>Materialkosten × {{ t.stueckzahl }}</td><td>{{ '%.2f'|format(t.materialkosten_gesamt) }} €</td></tr>
+            {% endif %}
+            <tr><td>Schnittzeit</td><td>{{ t.schnittzeit_min }} min</td></tr>
+            <tr><td>Einstechzeit gesamt</td><td>{{ t.einstechzeit_min }} min</td></tr>
+            <tr><td>Maschinenzeit pro Teil</td><td>{{ t.maschinenzeit_min }} min</td></tr>
+            <tr><td>Maschinenkosten pro Teil</td><td>{{ '%.2f'|format(t.maschinenkosten) }} €</td></tr>
+            <tr class="highlight"><td>Maschinenkosten × {{ t.stueckzahl }}</td><td>{{ '%.2f'|format(t.maschinenkosten_gesamt) }} €</td></tr>
+            <tr class="highlight"><td>Kosten dieses Teils</td><td>{{ '%.2f'|format(t.teilkosten) }} €</td></tr>
+        </table>
+    {% endfor %}
+
+    <h3>Summe</h3>
     <table class="result-table">
-        <tr><td>Schnittqualität</td><td>{{ r.schnittqualitaet_label }}</td></tr>
-        <tr><td>Schnittgeschwindigkeit</td><td>{{ r.schnittgeschwindigkeit_effektiv }} mm/min</td></tr>
-        <tr><td>Einstiche</td><td>{{ r.einstiche }}</td></tr>
-        <tr><td>Schnittzeit</td><td>{{ r.schnittzeit_min }} min</td></tr>
-        <tr><td>Einstechzeit gesamt</td><td>{{ r.einstechzeit_min }} min</td></tr>
-        <tr><td>Maschinenzeit pro Teil</td><td>{{ r.maschinenzeit_min }} min</td></tr>
-        <tr><td>Maschinenkosten pro Teil</td><td>{{ '%.2f'|format(r.maschinenkosten) }} €</td></tr>
-        <tr class="highlight"><td>Maschinenkosten × {{ r.stueckzahl }}</td><td>{{ '%.2f'|format(r.maschinenkosten_gesamt) }} €</td></tr>
+        {% if r.material_berechnet %}
+            <tr><td>Materialkosten gesamt</td><td>{{ '%.2f'|format(r.materialkosten_gesamt) }} €</td></tr>
+        {% endif %}
+        <tr><td>Maschinenkosten gesamt</td><td>{{ '%.2f'|format(r.maschinenkosten_gesamt) }} €</td></tr>
         <tr class="highlight"><td>Rüstkosten (einmalig)</td><td>{{ '%.2f'|format(r.ruestkosten) }} €</td></tr>
     </table>
 
-    <h3 class="total">Gesamtkosten für {{ r.stueckzahl }} Stück (unverbindliche Kalkulation): {{ '%.2f'|format(r.gesamtkosten) }} €</h3>
+    <h3 class="total">Gesamtkosten (unverbindliche Kalkulation): {{ '%.2f'|format(r.gesamtkosten) }} €</h3>
     <p class="hint">{{ netto_hinweis }} Diese Berechnung ist ein unverbindlicher Richtwert, kein verbindliches Angebot.</p>
 
-    <a href="{{ url_for('index') }}" class="button">Nächstes Teil berechnen</a>
+    <a href="{{ url_for('index') }}" class="button">Neue Berechnung</a>
     <a href="{{ url_for('export_pdf') }}" class="button secondary-button">PDF exportieren</a>
 </section>
 
@@ -61,7 +68,7 @@
     {% elif gesendet %}
         <p class="ok">Ihre unverbindliche Anfrage wurde per E-Mail an uns gesendet. Wir melden uns mit einem Angebot bei Ihnen.{% if bestaetigung_gesendet %} Eine Bestätigung mit einer Kopie der Kalkulation haben wir zusätzlich an Ihre E-Mail-Adresse geschickt.{% endif %}</p>
     {% else %}
-        <p class="hint">Teil und Kalkulation (PDF{% if r.geo.width_mm is not none %} + Original-DXF{% endif %}) per E-Mail an uns senden, um ein unverbindliches Angebot anzufordern. Es entsteht dadurch noch kein Vertrag.</p>
+        <p class="hint">Teil und Kalkulation (PDF{% if r.teile[0].geo.width_mm is not none %} + Original-DXF{% endif %}) per E-Mail an uns senden, um ein unverbindliches Angebot anzufordern. Es entsteht dadurch noch kein Vertrag.</p>
         <form action="{{ url_for('auftrag_senden') }}" method="post">
             <label>Ihr Name:
                 <input type="text" name="kunde_name">

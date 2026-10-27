@@ -120,7 +120,7 @@ def _apply_upload_limit():
 def handle_upload_too_large(e):
     settings = storage.load_json(SETTINGS_PATH, default=DEFAULT_SETTINGS)
     max_mb = settings.get("max_upload_mb", DEFAULT_SETTINGS["max_upload_mb"])
-    message = f"Datei ist zu groß (maximal {max_mb:.0f} MB erlaubt)."
+    message = f"Upload ist zu groß (maximal {max_mb:.0f} MB insgesamt erlaubt)."
     if request.path == url_for("dxf_preview"):
         return jsonify({"error": message}), 413
     flash(message)
@@ -172,10 +172,46 @@ def _session_result_path() -> str:
     return os.path.join(RESULTS_DIR, f"{_session_uid()}.json")
 
 
-def _session_dxf_path() -> str:
-    """Kopie der zuletzt berechneten DXF pro Session - wird nur gebraucht,
-    damit der Kunde sie beim Senden per Mail als Anhang mitschicken kann."""
-    return os.path.join(RESULTS_DIR, f"{_session_uid()}.dxf")
+def _session_dxf_path(nr: int) -> str:
+    """Kopie der zuletzt berechneten DXF (Teil Nr. nr) pro Session - wird nur
+    gebraucht, damit der Kunde sie beim Senden per Mail als Anhang
+    mitschicken kann."""
+    return os.path.join(RESULTS_DIR, f"{_session_uid()}_{nr}.dxf")
+
+
+def _session_preview_path(nr: int) -> str:
+    """PNG-Vorschau des Bauteils Nr. nr pro Session - wird im PDF-Export
+    eingebettet und beim Mailversand als zusätzlicher Bild-Anhang
+    mitgeschickt."""
+    return os.path.join(RESULTS_DIR, f"{_session_uid()}_{nr}.png")
+
+
+def _clear_session_files() -> None:
+    """Entfernt DXF-/PNG-Kopien einer früheren Berechnung dieser Session,
+    damit sie bei einer neuen Berechnung nicht versehentlich mitgesendet
+    werden."""
+    prefix = f"{_session_uid()}_"
+    for name in os.listdir(RESULTS_DIR):
+        if name.startswith(prefix):
+            try:
+                os.remove(os.path.join(RESULTS_DIR, name))
+            except OSError:
+                pass
+
+
+def _teil_files(result: dict) -> list[dict]:
+    """Pfade der Session-Dateien je Teil des zuletzt berechneten Ergebnisses
+    (None, wenn nicht vorhanden, z.B. bei manueller Eingabe)."""
+    files = []
+    for t in result["teile"]:
+        dxf_path = _session_dxf_path(t["nr"])
+        png_path = _session_preview_path(t["nr"])
+        files.append({
+            "dateiname": t["dateiname"],
+            "dxf_path": dxf_path if os.path.exists(dxf_path) else None,
+            "png_path": png_path if os.path.exists(png_path) else None,
+        })
+    return files
 
 
 def _new_captcha() -> tuple[int, int]:
@@ -185,12 +221,6 @@ def _new_captcha() -> tuple[int, int]:
     a, b = random.randint(1, 9), random.randint(1, 9)
     session["captcha_answer"] = a + b
     return a, b
-
-
-def _session_preview_path() -> str:
-    """PNG-Vorschau des Bauteils pro Session - wird im PDF-Export eingebettet
-    und beim Mailversand als zusätzlicher Bild-Anhang mitgeschickt."""
-    return os.path.join(RESULTS_DIR, f"{_session_uid()}.png")
 
 
 def _load_material_groups() -> list[dict]:
@@ -350,6 +380,31 @@ def berechnen():
 
     berechnungsart = request.form.get("berechnungsart", "dxf")
 
+    # Material ausschließlich serverseitig aus der Admin-Liste nachschlagen -
+    # Preis, Schnittgeschwindigkeit, Einstechzeit und Dichte kommen NIE aus
+    # dem Formular, sonst könnte jeder per direktem POST eigene Preise
+    # unterschieben.
+    materials = _flatten_materials(_load_material_groups())
+    material = None
+    material_index_raw = request.form.get("material_index", "").strip()
+    if material_index_raw != "":
+        try:
+            idx = int(material_index_raw)
+            if 0 <= idx < len(materials):
+                material = materials[idx]
+        except ValueError:
+            pass
+
+    if material is None:
+        flash("Bitte ein Material aus der Liste auswählen.")
+        return redirect(url_for("index"))
+
+    # Eingaben je Teil einsammeln (bei DXF-Upload ein Eintrag pro Datei).
+    teile_input = []
+    # Frühere Dateien dieser Session dürfen bei einer neuen Berechnung nicht
+    # mehr mitgesendet werden.
+    _clear_session_files()
+
     if berechnungsart == "manuell":
         schnittlaenge_mm = to_float("manuelle_schnittlaenge_mm", 0.0)
         if schnittlaenge_mm <= 0:
@@ -371,83 +426,74 @@ def berechnen():
             "skipped_entity_count": None,
             "einstiche": einstiche,
         }
-        svg_preview = ""
-        dateiname = "Manuelle Eingabe"
-        # Keine DXF diesmal - eine evtl. von einer frueheren Berechnung dieser
-        # Session liegende Kopie darf beim Senden nicht mehr angehaengt werden.
-        stale_dxf_copy = _session_dxf_path()
-        if os.path.exists(stale_dxf_copy):
-            os.remove(stale_dxf_copy)
-        stale_preview = _session_preview_path()
-        if os.path.exists(stale_preview):
-            os.remove(stale_preview)
+        teile_input.append({
+            "nr": 0,
+            "dateiname": "Manuelle Eingabe",
+            "geo": geo,
+            "svg_preview": "",
+            "stueckzahl": max(1, int(to_float("stueckzahl", 1))),
+        })
     else:
-        dxf_file = request.files.get("dxf_file")
-        if not dxf_file or dxf_file.filename == "":
-            flash("Bitte eine DXF-Datei hochladen.")
-            return redirect(url_for("index"))
-        if not dxf_file.filename.lower().endswith(".dxf"):
-            flash("Bitte eine DXF-Datei (.dxf) hochladen.")
-            return redirect(url_for("index"))
-
         if request.form.get("rechte_bestaetigt") != "on":
             flash("Bitte bestätigen, dass die hochgeladene Datei keine Rechte Dritter verletzt.")
             return redirect(url_for("index"))
 
-        filename = f"teil_{uuid.uuid4().hex}.dxf"
-        filepath = os.path.join(UPLOAD_DIR, filename)
-        dxf_file.save(filepath)
-
-        # Layer-Auswahl aus der Vorschau: nur gesetzt, wenn das Formular die
-        # Checkboxen tatsächlich gerendert hat (sonst None = keine Filterung).
-        included_layers = None
-        if request.form.get("layers_filter_active"):
-            included_layers = request.form.getlist("included_layers")
-
-        try:
-            geo = dxf.analyze_dxf(filepath, included_layers=included_layers)
-            svg_preview = dxf.render_svg_preview(filepath, included_layers=included_layers)
-            # Kopie pro Session behalten, damit der Kunde sie später per Mail
-            # mitschicken kann (siehe /auftrag/senden) - andere Besucher sehen
-            # diese Datei nicht, da sie unter der eigenen Session-UID liegt.
-            shutil.copyfile(filepath, _session_dxf_path())
-            png_bytes = dxf.render_png_preview(filepath, included_layers=included_layers)
-            if png_bytes:
-                with open(_session_preview_path(), "wb") as f:
-                    f.write(png_bytes)
-        except Exception as e:
-            flash(f"DXF konnte nicht gelesen werden: {e}")
+        # Jedes hochgeladene Teil hat einen eigenen Index (teil_idx) - alle
+        # zugehörigen Felder tragen ihn als Suffix (dxf_file_<i>, ...).
+        indices = request.form.getlist("teil_idx")
+        if not indices:
+            flash("Bitte mindestens eine DXF-Datei hochladen.")
             return redirect(url_for("index"))
-        finally:
-            # Nur lokal für die Analyse gebraucht - bei mehreren Nutzern auf
-            # einem gemeinsamen Server sollen fremde DXF-Dateien nicht liegen
-            # bleiben.
-            if os.path.exists(filepath):
-                os.remove(filepath)
 
-        einstiche = geo["einstiche"]
-        dateiname = dxf_file.filename
+        for nr, i in enumerate(indices):
+            dxf_file = request.files.get(f"dxf_file_{i}")
+            if not dxf_file or dxf_file.filename == "":
+                flash("Bitte für jedes Teil eine DXF-Datei hochladen (oder das leere Teil entfernen).")
+                return redirect(url_for("index"))
+            if not dxf_file.filename.lower().endswith(".dxf"):
+                flash("Bitte nur DXF-Dateien (.dxf) hochladen.")
+                return redirect(url_for("index"))
+
+            filepath = os.path.join(UPLOAD_DIR, f"teil_{uuid.uuid4().hex}.dxf")
+            dxf_file.save(filepath)
+
+            # Layer-Auswahl aus der Vorschau: nur gesetzt, wenn das Formular die
+            # Checkboxen tatsächlich gerendert hat (sonst None = keine Filterung).
+            included_layers = None
+            if request.form.get(f"layers_filter_active_{i}"):
+                included_layers = request.form.getlist(f"included_layers_{i}")
+
+            try:
+                geo = dxf.analyze_dxf(filepath, included_layers=included_layers)
+                svg_preview = dxf.render_svg_preview(filepath, included_layers=included_layers)
+                # Kopie pro Session behalten, damit der Kunde sie später per Mail
+                # mitschicken kann (siehe /auftrag/senden) - andere Besucher sehen
+                # diese Datei nicht, da sie unter der eigenen Session-UID liegt.
+                shutil.copyfile(filepath, _session_dxf_path(nr))
+                png_bytes = dxf.render_png_preview(filepath, included_layers=included_layers)
+                if png_bytes:
+                    with open(_session_preview_path(nr), "wb") as f:
+                        f.write(png_bytes)
+            except Exception as e:
+                _clear_session_files()
+                flash(f"DXF '{dxf_file.filename}' konnte nicht gelesen werden: {e}")
+                return redirect(url_for("index"))
+            finally:
+                # Nur lokal für die Analyse gebraucht - bei mehreren Nutzern auf
+                # einem gemeinsamen Server sollen fremde DXF-Dateien nicht liegen
+                # bleiben.
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+
+            teile_input.append({
+                "nr": nr,
+                "dateiname": dxf_file.filename,
+                "geo": geo,
+                "svg_preview": svg_preview,
+                "stueckzahl": max(1, int(to_float(f"stueckzahl_{i}", 1))),
+            })
 
     material_berechnet = request.form.get("material_berechnen") == "on"
-
-    # Material ausschließlich serverseitig aus der Admin-Liste nachschlagen -
-    # Preis, Schnittgeschwindigkeit, Einstechzeit und Dichte kommen NIE aus
-    # dem Formular, sonst könnte jeder per direktem POST eigene Preise
-    # unterschieben.
-    materials = _flatten_materials(_load_material_groups())
-    material = None
-    material_index_raw = request.form.get("material_index", "").strip()
-    if material_index_raw != "":
-        try:
-            idx = int(material_index_raw)
-            if 0 <= idx < len(materials):
-                material = materials[idx]
-        except ValueError:
-            pass
-
-    if material is None:
-        flash("Bitte ein Material aus der Liste auswählen.")
-        return redirect(url_for("index"))
 
     # Dicke darf der Kunde anpassen (reale Blechdicke kann leicht vom
     # Listenwert abweichen), Preis/Geschwindigkeit/Dichte nicht.
@@ -471,57 +517,77 @@ def berechnen():
     # nicht mehr aus einer globalen Einstellung.
     einstechzeit_s = material.get("einstechzeit_s", DEFAULT_EINSTECHZEIT_S)
 
-    stueckzahl = max(1, int(to_float("stueckzahl", 1)))
+    teile = []
+    for t in teile_input:
+        geo = t["geo"]
+        stueckzahl = t["stueckzahl"]
+        einstiche = geo["einstiche"]
 
-    # --- Blechverbrauch ---
-    # Herleitung: Volumen[cm3] = Fläche[cm2] * Dicke[cm]; Masse[g] = Volumen * Dichte[g/cm3]
-    if material_berechnet:
-        flaeche_cm2 = geo["area_mm2"] / 100
-        dicke_cm = dicke_mm / 10
-        volumen_cm3 = flaeche_cm2 * dicke_cm
-        gewicht_kg = (volumen_cm3 * dichte) / 1000
-        materialkosten = gewicht_kg * material_preis_pro_kg
-    else:
-        # Kunde bringt eigenes Material mit -> keine Materialkosten ansetzen
-        gewicht_kg = 0.0
-        materialkosten = 0.0
+        # --- Blechverbrauch ---
+        # Herleitung: Volumen[cm3] = Fläche[cm2] * Dicke[cm]; Masse[g] = Volumen * Dichte[g/cm3]
+        if material_berechnet:
+            flaeche_cm2 = geo["area_mm2"] / 100
+            dicke_cm = dicke_mm / 10
+            volumen_cm3 = flaeche_cm2 * dicke_cm
+            gewicht_kg = (volumen_cm3 * dichte) / 1000
+            materialkosten = gewicht_kg * material_preis_pro_kg
+        else:
+            # Kunde bringt eigenes Material mit -> keine Materialkosten ansetzen
+            gewicht_kg = 0.0
+            materialkosten = 0.0
 
-    # --- Schnittzeit (pro Teil) ---
-    schnittzeit_min = (
-        geo["total_cut_length_mm"] / schnittgeschw if schnittgeschw > 0 else 0
-    )
-    einstechzeit_min = (einstiche * einstechzeit_s) / 60
-    maschinenzeit_min = schnittzeit_min + einstechzeit_min
-    maschinenkosten = (maschinenzeit_min / 60) * stundensatz
+        # --- Schnittzeit (pro Teil) ---
+        schnittzeit_min = (
+            geo["total_cut_length_mm"] / schnittgeschw if schnittgeschw > 0 else 0
+        )
+        einstechzeit_min = (einstiche * einstechzeit_s) / 60
+        maschinenzeit_min = schnittzeit_min + einstechzeit_min
+        maschinenkosten = (maschinenzeit_min / 60) * stundensatz
+
+        materialkosten_gesamt = materialkosten * stueckzahl
+        maschinenkosten_gesamt = maschinenkosten * stueckzahl
+
+        teile.append({
+            "nr": t["nr"],
+            "dateiname": t["dateiname"],
+            "geo": geo,
+            "svg_preview": t["svg_preview"],
+            "stueckzahl": stueckzahl,
+            "einstiche": einstiche,
+            "gewicht_kg": round(gewicht_kg, 3),
+            "materialkosten": round(materialkosten, 2),
+            "materialkosten_gesamt": round(materialkosten_gesamt, 2),
+            "schnittzeit_min": round(schnittzeit_min, 2),
+            "einstechzeit_min": round(einstechzeit_min, 2),
+            "maschinenzeit_min": round(maschinenzeit_min, 2),
+            "maschinenkosten": round(maschinenkosten, 2),
+            "maschinenkosten_gesamt": round(maschinenkosten_gesamt, 2),
+            "teilkosten": round(materialkosten_gesamt + maschinenkosten_gesamt, 2),
+        })
 
     # Material- und Maschinenkosten fallen pro Teil an, die Rüstzeit nur einmal
-    # für den gesamten Auftrag unabhängig von der Stückzahl.
-    materialkosten_gesamt = materialkosten * stueckzahl
-    maschinenkosten_gesamt = maschinenkosten * stueckzahl
+    # für den gesamten Auftrag unabhängig von Stückzahl und Anzahl Teile.
+    materialkosten_summe = sum(t["materialkosten_gesamt"] for t in teile)
+    maschinenkosten_summe = sum(t["maschinenkosten_gesamt"] for t in teile)
     ruestkosten = (ruestzeit_min / 60) * stundensatz
+    gesamtkosten = materialkosten_summe + maschinenkosten_summe + ruestkosten
 
-    gesamtkosten = materialkosten_gesamt + maschinenkosten_gesamt + ruestkosten
+    if len(teile) == 1:
+        dateiname = teile[0]["dateiname"]
+    else:
+        dateiname = f"{len(teile)} Teile ({', '.join(t['dateiname'] for t in teile)})"
 
     result = {
-        "geo": geo,
-        "svg_preview": svg_preview,
+        "teile": teile,
         "material_berechnet": material_berechnet,
         "material_name": material["name"],
         "dicke_mm": dicke_mm,
         "dichte": dichte,
-        "gewicht_kg": round(gewicht_kg, 3),
         "material_preis_pro_kg": material_preis_pro_kg,
         "schnittqualitaet_label": SCHNITTQUALITAET[schnittqualitaet_key]["label"],
         "schnittgeschwindigkeit_effektiv": round(schnittgeschw, 1),
-        "stueckzahl": stueckzahl,
-        "materialkosten": round(materialkosten, 2),
-        "materialkosten_gesamt": round(materialkosten_gesamt, 2),
-        "einstiche": einstiche,
-        "schnittzeit_min": round(schnittzeit_min, 2),
-        "einstechzeit_min": round(einstechzeit_min, 2),
-        "maschinenzeit_min": round(maschinenzeit_min, 2),
-        "maschinenkosten": round(maschinenkosten, 2),
-        "maschinenkosten_gesamt": round(maschinenkosten_gesamt, 2),
+        "materialkosten_gesamt": round(materialkosten_summe, 2),
+        "maschinenkosten_gesamt": round(maschinenkosten_summe, 2),
         "ruestkosten": round(ruestkosten, 2),
         "gesamtkosten": round(gesamtkosten, 2),
     }
@@ -550,11 +616,8 @@ def export_pdf():
         flash("Keine Berechnung zum Exportieren vorhanden.")
         return redirect(url_for("index"))
 
-    preview_path = _session_preview_path()
-    if not os.path.exists(preview_path):
-        preview_path = None
-
-    pdf_bytes = pdf_export.build_pdf(data["result"], data["dateiname"], preview_path)
+    previews = [f["png_path"] for f in _teil_files(data["result"])]
+    pdf_bytes = pdf_export.build_pdf(data["result"], data["dateiname"], previews)
     return Response(
         pdf_bytes,
         mimetype="application/pdf",
@@ -604,13 +667,7 @@ def auftrag_senden():
         )
     session.pop("captcha_answer", None)
 
-    dxf_path = _session_dxf_path()
-    if not os.path.exists(dxf_path):
-        dxf_path = None
-
-    preview_path = _session_preview_path()
-    if not os.path.exists(preview_path):
-        preview_path = None
+    teil_files = _teil_files(result)
 
     kunde_name = request.form.get("kunde_name", "").strip()
     kunde_email = request.form.get("kunde_email", "").strip()
@@ -618,7 +675,7 @@ def auftrag_senden():
 
     try:
         mailer.send_offer_request_email(
-            result, dateiname, dxf_path, preview_path, kunde_name, kunde_email, kunde_notiz, empfaenger
+            result, dateiname, teil_files, kunde_name, kunde_email, kunde_notiz, empfaenger
         )
     except Exception as e:
         flash(f"E-Mail konnte nicht gesendet werden: {e}")
@@ -640,7 +697,7 @@ def auftrag_senden():
     if kunde_email:
         try:
             mailer.send_customer_confirmation_email(
-                result, dateiname, preview_path, kunde_name, kunde_email, empfaenger
+                result, dateiname, teil_files, kunde_name, kunde_email, empfaenger
             )
             bestaetigung_gesendet = True
         except Exception:

@@ -78,7 +78,7 @@ def build_pdf(result: dict, dateiname: str, preview_png_paths: list[str | None] 
     else:
         _row(pdf, "Materialkosten", "0.00 EUR (vom Kunden gestellt)")
     _row(pdf, "Maschinenkosten gesamt", f"{result['maschinenkosten_gesamt']:.2f} EUR")
-    _row(pdf, "Rüstkosten (einmalig)", f"{result['ruestkosten']:.2f} EUR", bold=True)
+    _row(pdf, f"Rüstkosten ({result.get('ruestvorgaenge', 1)} Tafel(n))", f"{result['ruestkosten']:.2f} EUR", bold=True)
 
     pdf.ln(6)
     pdf.set_font("helvetica", "B", 14)

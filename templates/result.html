@@ -51,7 +51,7 @@
             <tr><td>Materialkosten gesamt</td><td>{{ '%.2f'|format(r.materialkosten_gesamt) }} €</td></tr>
         {% endif %}
         <tr><td>Maschinenkosten gesamt</td><td>{{ '%.2f'|format(r.maschinenkosten_gesamt) }} €</td></tr>
-        <tr class="highlight"><td>Rüstkosten (einmalig)</td><td>{{ '%.2f'|format(r.ruestkosten) }} €</td></tr>
+        <tr class="highlight"><td>Rüstkosten ({{ r.ruestvorgaenge or 1 }} Tafel(n))</td><td>{{ '%.2f'|format(r.ruestkosten) }} €</td></tr>
     </table>
 
     <h3 class="total">Gesamtkosten (unverbindliche Kalkulation): {{ '%.2f'|format(r.gesamtkosten) }} €</h3>

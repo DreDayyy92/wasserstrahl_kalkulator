@@ -565,11 +565,14 @@ def berechnen():
             "teilkosten": round(materialkosten_gesamt + maschinenkosten_gesamt, 2),
         })
 
-    # Material- und Maschinenkosten fallen pro Teil an, die Rüstzeit nur einmal
-    # für den gesamten Auftrag unabhängig von Stückzahl und Anzahl Teile.
+    # Material- und Maschinenkosten fallen pro Teil an. Die Rüstzeit fällt pro
+    # Tafel an (mehrere kleine Teile auf einer Tafel teilen sich einen
+    # Rüstvorgang, ein Muster auf je einer von 6 Tafeln braucht 6) - die
+    # Anzahl gibt der Kunde an.
+    ruestvorgaenge = max(1, int(to_float("ruestvorgaenge", 1)))
     materialkosten_summe = sum(t["materialkosten_gesamt"] for t in teile)
     maschinenkosten_summe = sum(t["maschinenkosten_gesamt"] for t in teile)
-    ruestkosten = (ruestzeit_min / 60) * stundensatz
+    ruestkosten = (ruestzeit_min / 60) * stundensatz * ruestvorgaenge
     gesamtkosten = materialkosten_summe + maschinenkosten_summe + ruestkosten
 
     if len(teile) == 1:
@@ -588,6 +591,7 @@ def berechnen():
         "schnittgeschwindigkeit_effektiv": round(schnittgeschw, 1),
         "materialkosten_gesamt": round(materialkosten_summe, 2),
         "maschinenkosten_gesamt": round(maschinenkosten_summe, 2),
+        "ruestvorgaenge": ruestvorgaenge,
         "ruestkosten": round(ruestkosten, 2),
         "gesamtkosten": round(gesamtkosten, 2),
     }
